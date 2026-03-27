@@ -10,10 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { slugify } from "@/lib/formatters";
 import { toast } from "sonner";
 import { ExternalLink } from "lucide-react";
+import { validateImageFile } from "@/lib/security";
 
 export default function StoreSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const { data: establishment, isLoading } = useQuery({
     queryKey: ["my-establishment"],
@@ -33,7 +35,6 @@ export default function StoreSettings() {
     logo_url: "",
   });
 
-  // Sync form when data loads
   const [initialized, setInitialized] = useState(false);
   if (establishment && !initialized) {
     setForm({
@@ -70,6 +71,36 @@ export default function StoreSettings() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const handleUploadLogo = async (file?: File) => {
+    if (!file || !user) return;
+    const validation = validateImageFile(file);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+      const extension = file.name.split(".").pop() || "jpg";
+      const filePath = `stores/${user.id}/${crypto.randomUUID()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage.from("product-images").upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
+      setForm((prev) => ({ ...prev, logo_url: data.publicUrl }));
+      toast.success("Logo enviado com sucesso!");
+    } catch (err: any) {
+      toast.error(err.message || "Nao foi possivel enviar o logo.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   if (isLoading) return <p className="text-center py-12 text-muted-foreground">Carregando...</p>;
 
   const slug = slugify(form.name || "minha-loja");
@@ -79,14 +110,14 @@ export default function StoreSettings() {
     <div className="space-y-6 animate-fade-in max-w-2xl">
       <div>
         <h1 className="text-3xl font-bold">Minha Loja</h1>
-        <p className="text-muted-foreground">Configure os dados do seu estabelecimento</p>
+        <p className="text-muted-foreground">Aqui você ajusta tudo o que o cliente vai ver no cardápio.</p>
       </div>
 
       {establishment && (
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Link público do seu cardápio:</p>
+              <p className="text-sm font-medium">Link do seu cardápio:</p>
               <p className="text-sm text-primary font-semibold">{publicUrl}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => window.open(publicUrl, "_blank")}>
@@ -98,7 +129,7 @@ export default function StoreSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{establishment ? "Editar Loja" : "Criar Loja"}</CardTitle>
+          <CardTitle>{establishment ? "Editar dados da loja" : "Criar minha loja"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -112,22 +143,39 @@ export default function StoreSettings() {
           <div>
             <Label>WhatsApp *</Label>
             <Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="5511999998888" />
-            <p className="text-xs text-muted-foreground mt-1">Formato: código do país + DDD + número (ex: 5511999998888)</p>
+            <p className="text-xs text-muted-foreground mt-1">Use código do país + DDD + número. Exemplo: 5511999998888.</p>
           </div>
           <div>
             <Label>Endereço</Label>
             <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Rua das Flores, 123" />
           </div>
           <div>
-            <Label>Horário de Funcionamento</Label>
+            <Label>Horário de funcionamento</Label>
             <Input value={form.opening_hours} onChange={(e) => setForm({ ...form, opening_hours: e.target.value })} placeholder="Seg-Sex: 11h-23h | Sáb-Dom: 11h-00h" />
           </div>
           <div>
-            <Label>URL do Logo</Label>
+            <Label>URL do logo</Label>
             <Input value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://..." />
           </div>
+          <div>
+            <Label>Upload do logo</Label>
+            <Input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => handleUploadLogo(e.target.files?.[0])}
+              disabled={uploadingLogo}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              {uploadingLogo ? "Enviando logo..." : "Formatos: JPG, PNG ou WEBP. Tamanho maximo: 3MB."}
+            </p>
+          </div>
+          {form.logo_url && (
+            <div className="rounded-lg border p-2 w-fit">
+              <img src={form.logo_url} alt="Preview do logo" className="h-20 w-20 rounded-md object-cover" />
+            </div>
+          )}
           <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!form.name || !form.whatsapp}>
-            {establishment ? "Salvar Alterações" : "Criar Loja"}
+            {establishment ? "Salvar alterações" : "Criar loja"}
           </Button>
         </CardContent>
       </Card>
