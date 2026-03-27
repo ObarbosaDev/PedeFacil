@@ -18,6 +18,7 @@ import StoreSettings from "./pages/admin/StoreSettings";
 import Loyalty from "./pages/admin/Loyalty";
 import PublicMenu from "./pages/public/PublicMenu";
 import Checkout from "./pages/public/Checkout";
+import ClientPanel from "./pages/client/ClientPanel";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/registro" element={<Register />} />
 
               {/* Public store */}
+              <Route path="/cliente" element={<ClientPanel />} />
               <Route path="/loja/:slug" element={<PublicMenu />} />
               <Route path="/loja/:slug/checkout" element={<Checkout />} />
 

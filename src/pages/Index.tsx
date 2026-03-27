@@ -13,6 +13,9 @@ export default function LandingPage() {
             <span className="text-2xl font-extrabold">Fácil</span>
           </Link>
           <div className="flex items-center gap-3">
+            <Link to="/cliente">
+              <Button variant="outline">Sou Cliente</Button>
+            </Link>
             <Link to="/login">
               <Button variant="ghost">Entrar</Button>
             </Link>
