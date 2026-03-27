@@ -27,9 +27,9 @@ export default function Categories() {
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ["categories", establishment?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("categories").select("*").eq("establishment_id", establishment!.id).order("sort_order");
+      queryKey: ["categories", establishment?.id],
+      queryFn: async () => {
+        const { data } = await supabase.from("categories").select("*").eq("establishment_id", establishment!.id).order("sort_order");
       return data || [];
     },
     enabled: !!establishment,
@@ -54,7 +54,7 @@ export default function Categories() {
       setDialogOpen(false);
       setEditing(null);
       setName("");
-      toast.success(editing ? "Categoria atualizada!" : "Categoria criada!");
+      toast.success(editing ? "Seção atualizada!" : "Seção criada!");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -66,7 +66,7 @@ export default function Categories() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast.success("Categoria removida!");
+      toast.success("Seção removida!");
     },
   });
 
@@ -78,24 +78,24 @@ export default function Categories() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Categorias</h1>
-          <p className="text-muted-foreground">{categories.length} categoria(s)</p>
+          <h1 className="text-3xl font-bold">Seções</h1>
+          <p className="text-muted-foreground">{categories.length} seção(ões) no cardápio</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) { setEditing(null); setName(""); } }}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Nova Categoria</Button>
+            <Button><Plus className="h-4 w-4 mr-2" />Nova Seção</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Editar Categoria" : "Nova Categoria"}</DialogTitle>
+              <DialogTitle>{editing ? "Editar Seção" : "Nova Seção"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
                 <Label>Nome</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Hambúrgueres" />
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Hambúrgueres" />
               </div>
               <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!name.trim()}>
-                {editing ? "Salvar" : "Criar Categoria"}
+                {editing ? "Salvar" : "Criar seção"}
               </Button>
             </div>
           </DialogContent>

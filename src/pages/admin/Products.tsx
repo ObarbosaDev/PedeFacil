@@ -13,12 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
+import { validateImageFile } from "@/lib/security";
 
 export default function Products() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", price: "", category_id: "", is_available: true, image_url: "" });
 
   const { data: establishment } = useQuery({
@@ -105,6 +107,36 @@ export default function Products() {
     setDialogOpen(true);
   };
 
+  const handleUploadImage = async (file?: File) => {
+    if (!file || !establishment) return;
+    const validation = validateImageFile(file);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const extension = file.name.split(".").pop() || "jpg";
+      const filePath = `products/${establishment.id}/${crypto.randomUUID()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage.from("product-images").upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
+      setForm((prev) => ({ ...prev, image_url: data.publicUrl }));
+      toast.success("Imagem enviada com sucesso!");
+    } catch (err: any) {
+      toast.error(err.message || "Nao foi possivel enviar a imagem.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   if (!establishment) {
     return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro em "Minha Loja".</p>;
   }
@@ -113,16 +145,16 @@ export default function Products() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Produtos</h1>
-          <p className="text-muted-foreground">{products.length} produto(s) cadastrado(s)</p>
+          <h1 className="text-3xl font-bold">Cardápio</h1>
+          <p className="text-muted-foreground">{products.length} item(ns) cadastrado(s)</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Novo Produto</Button>
+            <Button><Plus className="h-4 w-4 mr-2" />Novo Item</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Editar Produto" : "Novo Produto"}</DialogTitle>
+              <DialogTitle>{editing ? "Editar Item" : "Novo Item"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -138,7 +170,7 @@ export default function Products() {
                 <Input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="25.90" />
               </div>
               <div>
-                <Label>Categoria</Label>
+                <Label>Seção</Label>
                 <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
@@ -149,15 +181,32 @@ export default function Products() {
                 </Select>
               </div>
               <div>
-                <Label>URL da Imagem</Label>
+                <Label>URL da imagem</Label>
                 <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
               </div>
+              <div>
+                <Label>Upload da imagem</Label>
+                <Input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => handleUploadImage(e.target.files?.[0])}
+                  disabled={uploadingImage}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {uploadingImage ? "Enviando imagem..." : "Formatos: JPG, PNG ou WEBP. Tamanho maximo: 3MB."}
+                </p>
+              </div>
+              {form.image_url && (
+                <div className="rounded-lg border p-2">
+                  <img src={form.image_url} alt="Preview do produto" className="w-full h-36 object-cover rounded-md" />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Switch checked={form.is_available} onCheckedChange={(v) => setForm({ ...form, is_available: v })} />
-                <Label>Disponível</Label>
+                <Label>Disponível para venda</Label>
               </div>
               <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!form.name || !form.price}>
-                {editing ? "Salvar" : "Criar Produto"}
+                {editing ? "Salvar" : "Criar item"}
               </Button>
             </div>
           </DialogContent>
@@ -176,7 +225,7 @@ export default function Products() {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold">{product.name}</h3>
-                  <p className="text-sm text-muted-foreground">{product.categories?.name || "Sem categoria"}</p>
+                  <p className="text-sm text-muted-foreground">{product.categories?.name || "Sem seção"}</p>
                   <p className="text-lg font-bold text-primary mt-1">{formatCurrency(Number(product.price))}</p>
                 </div>
                 <div className="flex gap-1">
@@ -189,7 +238,7 @@ export default function Products() {
                 </div>
               </div>
               {!product.is_available && (
-                <span className="text-xs text-destructive font-medium">Indisponível</span>
+                <span className="text-xs text-destructive font-medium">Pausado no cardápio.</span>
               )}
             </CardContent>
           </Card>

@@ -6,12 +6,12 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+  { label: "Resumo", icon: LayoutDashboard, path: "/admin" },
   { label: "Pedidos", icon: ClipboardList, path: "/admin/pedidos" },
-  { label: "Produtos", icon: ShoppingBag, path: "/admin/produtos" },
-  { label: "Categorias", icon: FolderOpen, path: "/admin/categorias" },
+  { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos" },
+  { label: "Seções", icon: FolderOpen, path: "/admin/categorias" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja" },
-  { label: "Fidelidade", icon: Star, path: "/admin/fidelidade" },
+  { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade" },
 ];
 
 export default function AdminLayout() {
@@ -30,11 +30,15 @@ export default function AdminLayout() {
   if (!user) return <Navigate to="/login" replace />;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-muted/30 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-orange-300/10 blur-3xl" />
+      </div>
+
       <AdminSidebar />
 
-      {/* Mobile nav */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b px-4 py-3 flex items-center justify-between">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
         <Link to="/admin" className="flex items-center gap-1">
           <span className="text-xl font-extrabold text-primary">Pede</span>
           <span className="text-xl font-extrabold">Fácil</span>
@@ -68,8 +72,10 @@ export default function AdminLayout() {
         </div>
       )}
 
-      <main className="flex-1 md:p-8 p-4 pt-20 md:pt-8 overflow-auto">
-        <Outlet />
+      <main className="flex-1 md:p-8 p-4 pt-20 md:pt-8 overflow-auto relative z-10">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

@@ -6,14 +6,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
+import { ArrowRight, BadgeCheck, Rocket, Store, Users } from "lucide-react";
+import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
 
-const registerSchema = z.object({
-  fullName: z.string().min(2, "Mínimo 2 caracteres").max(100),
-  email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Mínimo 6 caracteres"),
-});
+const registerSchema = z
+  .object({
+    fullName: z.string().trim().min(2, "Minimo 2 caracteres").max(100),
+    email: z.string().trim().email("Email invalido"),
+    password: z.string().regex(passwordRegex, PASSWORD_RULE),
+    confirmPassword: z.string().min(8, "Confirme sua senha"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas nao conferem.",
+    path: ["confirmPassword"],
+  });
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
@@ -24,76 +33,155 @@ export default function Register() {
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: "", email: "", password: "" },
+    defaultValues: { fullName: "", email: "", password: "", confirmPassword: "" },
   });
 
   const onSubmit = async (data: RegisterForm) => {
     try {
       setLoading(true);
-      await signUp(data.email, data.password, data.fullName);
+      await signUp(data.email, data.password, data.fullName.trim());
       toast.success("Conta criada! Verifique seu email para confirmar.");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao criar conta");
+      toast.error(err.message || "Nao foi possivel criar sua conta agora.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="hidden lg:flex lg:w-1/2 bg-primary items-center justify-center p-12">
-        <div className="text-primary-foreground max-w-md">
-          <h1 className="text-5xl font-extrabold mb-4">PedeFácil</h1>
-          <p className="text-xl opacity-90">Crie sua loja digital em minutos e comece a receber pedidos hoje mesmo.</p>
-        </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute -top-24 right-0 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-80 w-80 rounded-full bg-orange-300/20 blur-3xl" />
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden mb-8">
-            <h1 className="text-3xl font-extrabold">
-              <span className="text-primary">Pede</span>Fácil
-            </h1>
+      <div className="min-h-screen grid lg:grid-cols-2 relative z-10">
+        <section className="hidden lg:flex p-10 xl:p-14">
+          <div className="w-full rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 text-zinc-50 p-10 flex flex-col justify-between">
+            <div>
+              <Link to="/" className="inline-flex items-center gap-1 mb-8">
+                <span className="text-3xl font-black text-primary">Pede</span>
+                <span className="text-3xl font-black">Facil</span>
+              </Link>
+
+              <h1 className="text-4xl font-black leading-tight">Coloque sua loja no jogo em poucos minutos.</h1>
+              <p className="mt-4 text-lg text-zinc-300 max-w-md">
+                Crie sua conta, configure seu cardapio e comece a receber pedidos ainda hoje.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
+                <Rocket className="h-5 w-5 text-primary" />
+                <p>Setup rapido, sem dor de cabeca.</p>
+              </div>
+              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
+                <BadgeCheck className="h-5 w-5 text-emerald-400" />
+                <p>Painel pronto para operacao do dia a dia.</p>
+              </div>
+              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
+                <Users className="h-5 w-5 text-orange-300" />
+                <p>Clientes pedindo com mais facilidade.</p>
+              </div>
+            </div>
           </div>
+        </section>
 
-          <h2 className="text-2xl font-bold mb-2">Criar sua conta</h2>
-          <p className="text-muted-foreground mb-8">Comece grátis, sem cartão de crédito</p>
+        <section className="flex items-center justify-center p-6 sm:p-8">
+          <Card className="w-full max-w-md border-primary/20 shadow-xl">
+            <CardContent className="p-6 sm:p-8">
+              <div className="lg:hidden mb-6">
+                <Link to="/" className="inline-flex items-center gap-1">
+                  <span className="text-2xl font-black text-primary">Pede</span>
+                  <span className="text-2xl font-black">Facil</span>
+                </Link>
+              </div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="fullName" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome completo</FormLabel>
-                  <FormControl><Input placeholder="João Silva" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="seu@email.com" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Senha</FormLabel>
-                  <FormControl><Input type="password" placeholder="••••••" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                {loading ? "Criando..." : "Criar conta grátis"}
-              </Button>
-            </form>
-          </Form>
+              <div className="mb-6">
+                <p className="text-sm text-primary font-medium flex items-center gap-2">
+                  <Store className="h-4 w-4" />
+                  Cadastro de lojista
+                </p>
+                <h2 className="text-2xl font-black mt-1">Criar minha conta</h2>
+                <p className="text-muted-foreground mt-1">Sem cartao de credito. So criar e comecar.</p>
+              </div>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Já tem conta?{" "}
-            <Link to="/login" className="text-primary font-semibold hover:underline">Fazer login</Link>
-          </p>
-        </div>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome completo</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: Joao Silva" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="seunome@empresa.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Senha</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="Crie uma senha forte" {...field} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">{PASSWORD_RULE}</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirmar senha</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="Repita sua senha" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button type="submit" className="w-full h-11" disabled={loading}>
+                    {loading ? "Criando conta..." : "Criar conta gratis"}
+                    {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
+                  </Button>
+                </form>
+              </Form>
+
+              <p className="text-center text-sm text-muted-foreground mt-6">
+                Ja tem conta?{" "}
+                <Link to="/login" className="text-primary font-semibold hover:underline">
+                  Entrar agora
+                </Link>
+              </p>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
   );

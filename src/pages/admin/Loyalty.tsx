@@ -36,16 +36,16 @@ export default function Loyalty() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-bold">Fidelidade</h1>
-        <p className="text-muted-foreground">Clientes acumulam pontos a cada pedido</p>
+        <h1 className="text-3xl font-bold">Clientes VIP</h1>
+        <p className="text-muted-foreground">Quem mais compra, mais pontos acumula.</p>
       </div>
 
       {accounts.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Star className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Nenhum cliente fidelizado ainda.</p>
-            <p className="text-sm text-muted-foreground mt-1">Pontos serão acumulados automaticamente com cada pedido.</p>
+            <p className="text-muted-foreground">Ainda não tem cliente com pontos.</p>
+            <p className="text-sm text-muted-foreground mt-1">Assim que os pedidos entrarem, os pontos vão aparecer aqui.</p>
           </CardContent>
         </Card>
       ) : (
