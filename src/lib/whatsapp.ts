@@ -1,4 +1,4 @@
-import { CartItem } from "@/hooks/useCart";
+﻿import { CartItem } from "@/hooks/useCart";
 
 interface WhatsAppOrderData {
   storeName: string;
@@ -7,30 +7,44 @@ interface WhatsAppOrderData {
   customerPhone: string;
   orderType: "pickup" | "delivery";
   observation?: string;
+  deliveryAddress?: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    complement?: string;
+    reference?: string;
+  };
   items: CartItem[];
+  subtotal: number;
+  discountAmount?: number;
+  couponCode?: string;
   total: number;
 }
 
 export function generateWhatsAppMessage(data: WhatsAppOrderData): string {
   const itemLines = data.items
-    .map((item) => `• ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}`)
+    .map((item) => `- ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}`)
     .join("\n");
 
-  const typeLabel = data.orderType === "pickup" ? "🏪 Retirada" : "🛵 Entrega";
+  const typeLabel = data.orderType === "pickup" ? "Retirada" : "Entrega";
+  const address = data.deliveryAddress;
 
-  const message = `🛒 *Novo Pedido - ${data.storeName}*
+  const hasDeliveryAddress =
+    data.orderType === "delivery" &&
+    !!(address?.street || address?.number || address?.neighborhood || address?.city || address?.state || address?.zipCode);
 
-👤 *Cliente:* ${data.customerName}
-📱 *Telefone:* ${data.customerPhone}
-📦 *Tipo:* ${typeLabel}
-${data.observation ? `📝 *Obs:* ${data.observation}` : ""}
+  const addressBlock = hasDeliveryAddress
+    ? `\n*Endereço de entrega:*\n${address?.street || ""}, ${address?.number || "S/N"}\n${address?.neighborhood || ""} - ${address?.city || ""}/${address?.state || ""}\nCEP: ${address?.zipCode || "-"}${address?.complement ? `\nComplemento: ${address.complement}` : ""}${address?.reference ? `\nReferência: ${address.reference}` : ""}\n`
+    : "";
 
-*Itens do Pedido:*
-${itemLines}
+  const discountValue = Number(data.discountAmount || 0);
+  const couponLine = data.couponCode && discountValue > 0 ? `*Cupom:* ${data.couponCode}\n` : "";
+  const discountLine = discountValue > 0 ? `*Desconto:* -R$ ${discountValue.toFixed(2)}\n` : "";
 
-💰 *Total: R$ ${data.total.toFixed(2)}*
-
-_Pedido enviado via PedeFácil_`;
+  const message = `*Novo pedido - ${data.storeName}*\n\n*Cliente:* ${data.customerName}\n*Telefone:* ${data.customerPhone}\n*Tipo:* ${typeLabel}\n${addressBlock}${data.observation ? `*Observações:* ${data.observation}` : ""}\n\n*Itens do pedido:*\n${itemLines}\n\n*Subtotal:* R$ ${data.subtotal.toFixed(2)}\n${couponLine}${discountLine}*Total:* R$ ${data.total.toFixed(2)}\n\n_Pedido enviado via PedeFácil_`;
 
   return message;
 }

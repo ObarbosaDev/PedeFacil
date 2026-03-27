@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const periodOptions = [
-  { value: "7", label: "Ultimos 7 dias" },
-  { value: "30", label: "Ultimos 30 dias" },
-  { value: "90", label: "Ultimos 90 dias" },
+  { value: "7", label: "Últimos 7 dias" },
+  { value: "30", label: "Últimos 30 dias" },
+  { value: "90", label: "Últimos 90 dias" },
 ] as const;
 
 type PeriodValue = (typeof periodOptions)[number]["value"];
@@ -64,7 +64,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, total, status, created_at")
+        .select("id, total, status, created_at, customer_name, customer_phone, order_type")
         .eq("establishment_id", establishment!.id)
         .gte("created_at", periodStartIso)
         .order("created_at", { ascending: false });
@@ -114,15 +114,15 @@ export default function Dashboard() {
   }, [establishment?.id, queryClient]);
 
   const todayOrders = orders.filter(
-    (o) => new Date(o.created_at).toDateString() === new Date().toDateString()
+    (order) => new Date(order.created_at).toDateString() === new Date().toDateString()
   );
-  const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total), 0);
-  const inProgress = orders.filter((o) => !["delivered", "cancelled"].includes(o.status)).length;
+  const todayRevenue = todayOrders.reduce((sum, order) => sum + Number(order.total), 0);
+  const inProgress = orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length;
 
   const analytics = useMemo(() => {
-    const paidOrders = periodOrders.filter((o: any) => o.status !== "cancelled");
-    const revenue = paidOrders.reduce((sum: number, o: any) => sum + Number(o.total), 0);
-    const cancelled = periodOrders.filter((o: any) => o.status === "cancelled").length;
+    const paidOrders = periodOrders.filter((order: any) => order.status !== "cancelled");
+    const revenue = paidOrders.reduce((sum: number, order: any) => sum + Number(order.total), 0);
+    const cancelled = periodOrders.filter((order: any) => order.status === "cancelled").length;
     const cancellationRate = periodOrders.length > 0 ? (cancelled / periodOrders.length) * 100 : 0;
     const avgTicket = paidOrders.length > 0 ? revenue / paidOrders.length : 0;
 
@@ -151,20 +151,12 @@ export default function Dashboard() {
   }, [periodOrders, periodItems]);
 
   const exportOrdersCsv = () => {
-    const header = [
-      "id",
-      "cliente",
-      "telefone",
-      "tipo",
-      "status",
-      "total",
-      "criado_em",
-    ];
+    const header = ["id", "cliente", "telefone", "tipo", "status", "total", "criado_em"];
 
     const escapeCsv = (value: unknown) => {
       const text = String(value ?? "");
       if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
-        return `"${text.replace(/\"/g, "\"\"")}"`;
+        return `"${text.replace(/\"/g, '""')}"`;
       }
       return text;
     };
@@ -198,10 +190,10 @@ export default function Dashboard() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <p className="text-xs uppercase tracking-wider opacity-90">Painel do lojista</p>
-              <h1 className="text-3xl md:text-4xl font-black mt-1">Resumo do seu negocio em tempo real</h1>
+              <h1 className="text-3xl md:text-4xl font-black mt-1">Resumo do seu negócio em tempo real</h1>
               <p className="mt-2 opacity-90">
                 {establishment?.name
-                  ? `Tudo centralizado para voce tocar a operacao da ${establishment.name}.`
+                  ? `Tudo centralizado para você tocar a operação da ${establishment.name}.`
                   : "Configure sua loja para desbloquear todos os recursos do painel."}
               </p>
             </div>
@@ -215,9 +207,7 @@ export default function Dashboard() {
               </Button>
             </Link>
             <Link to="/admin/produtos">
-              <Button variant="secondary" size="sm">
-                Atualizar cardapio
-              </Button>
+              <Button variant="secondary" size="sm">Atualizar cardápio</Button>
             </Link>
           </div>
         </div>
@@ -226,9 +216,9 @@ export default function Dashboard() {
       {!establishment && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="p-6">
-            <p className="font-semibold text-lg">Sua loja ainda nao foi configurada.</p>
+            <p className="font-semibold text-lg">Sua loja ainda não foi configurada.</p>
             <p className="text-muted-foreground mt-1">
-              Vai em <strong>"Minha Loja"</strong> no menu, preencha os dados e ja comece a receber pedidos.
+              Vai em <strong>"Minha Loja"</strong> no menu, preencha os dados e já começa a receber pedidos.
             </p>
           </CardContent>
         </Card>
@@ -248,7 +238,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {orders.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">Ainda nao caiu nenhum pedido por aqui.</p>
+              <p className="text-muted-foreground text-center py-8">Ainda não caiu nenhum pedido por aqui.</p>
             ) : (
               <div className="space-y-3">
                 {orders.slice(0, 6).map((order) => (
@@ -270,7 +260,7 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Radar rapido</CardTitle>
+            <CardTitle>Radar rápido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="rounded-lg border p-3">
@@ -278,14 +268,14 @@ export default function Dashboard() {
               <p className="text-2xl font-bold">{todayOrders.length}</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground">Ticket medio (hoje)</p>
+              <p className="text-muted-foreground">Ticket médio (hoje)</p>
               <p className="text-2xl font-bold">
                 {todayOrders.length > 0 ? formatCurrency(todayRevenue / todayOrders.length) : formatCurrency(0)}
               </p>
             </div>
             <div className="rounded-lg border p-3">
               <p className="text-muted-foreground">Clientes</p>
-              <p className="text-base">Modulo em evolucao.</p>
+              <p className="text-base">Módulo em evolução.</p>
             </div>
           </CardContent>
         </Card>
@@ -296,7 +286,7 @@ export default function Dashboard() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-primary" />
-              Analise por periodo
+              Análise por período
             </CardTitle>
             <div className="flex items-center gap-2">
               <div className="w-[180px]">
@@ -311,14 +301,12 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button size="sm" variant="outline" onClick={exportOrdersCsv}>
-                Exportar CSV
-              </Button>
+              <Button size="sm" variant="outline" onClick={exportOrdersCsv}>Exportar CSV</Button>
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">Pedidos no periodo</p>
+              <p className="text-xs text-muted-foreground">Pedidos no período</p>
               <p className="text-2xl font-bold">{analytics.totalOrders}</p>
             </div>
             <div className="rounded-lg border p-3">
@@ -326,7 +314,7 @@ export default function Dashboard() {
               <p className="text-2xl font-bold">{formatCurrency(analytics.revenue)}</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">Ticket medio</p>
+              <p className="text-xs text-muted-foreground">Ticket médio</p>
               <p className="text-2xl font-bold">{formatCurrency(analytics.avgTicket)}</p>
             </div>
             <div className="rounded-lg border p-3">
@@ -340,12 +328,12 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
-              Top produtos no periodo
+              Top produtos no período
             </CardTitle>
           </CardHeader>
           <CardContent>
             {analytics.topProducts.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Ainda nao ha dados suficientes para ranking.</p>
+              <p className="text-muted-foreground text-sm">Ainda não há dados suficientes para ranking.</p>
             ) : (
               <div className="space-y-2">
                 {analytics.topProducts.map((item, index) => (
@@ -365,3 +353,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

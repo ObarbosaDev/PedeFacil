@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,14 +23,15 @@ import {
   Store,
   Tag,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type ClientFilter = "all" | "with_logo" | "with_address" | "with_description";
 type ClientSort = "name" | "recent";
 
 const sidebarItems = [
-  { label: "Início", icon: Home },
-  { label: "Explorar Lojas", icon: Compass },
-  { label: "Achadinhos", icon: Tag },
+  { label: "Início", icon: Home, href: "#inicio" },
+  { label: "Explorar Lojas", icon: Compass, href: "#explorar-lojas" },
+  { label: "Achadinhos", icon: Tag, href: "#achadinhos" },
 ];
 
 export default function ClientPanel() {
@@ -74,20 +75,22 @@ export default function ClientPanel() {
       return true;
     });
 
-    const sorted = [...byFilter].sort((a: any, b: any) => {
+    return [...byFilter].sort((a: any, b: any) => {
       if (sortBy === "recent") {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       return String(a.name).localeCompare(String(b.name), "pt-BR");
     });
-
-    return sorted;
   }, [establishments, search, filter, sortBy]);
 
   const featured = filteredEstablishments.slice(0, 3);
 
   const openWhatsApp = (phone: string) => {
     const clean = phone.replace(/\D/g, "");
+    if (!clean) {
+      toast.error("Essa loja ainda não configurou WhatsApp.");
+      return;
+    }
     window.open(`https://wa.me/${clean}`, "_blank");
   };
 
@@ -105,17 +108,18 @@ export default function ClientPanel() {
 
           <nav className="px-3 space-y-1">
             {sidebarItems.map((item, index) => (
-              <div
+              <a
                 key={item.label}
+                href={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium ${
                   index === 0
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/75 bg-sidebar-accent/30"
+                    : "text-sidebar-foreground/75 bg-sidebar-accent/30 hover:bg-sidebar-accent/60 transition-colors"
                 }`}
               >
                 <item.icon className="h-5 w-5" />
                 {item.label}
-              </div>
+              </a>
             ))}
           </nav>
 
@@ -125,7 +129,7 @@ export default function ClientPanel() {
                 <CardTitle className="text-sm">Resumo da vez</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-xs text-sidebar-foreground/80">
-                <p>{metrics.total} loja(s) pra conhecer</p>
+                <p>{metrics.total} loja(s) para conhecer</p>
                 <p>{metrics.withAddress} com endereço certinho</p>
                 <p>{metrics.withHours} com horário informado</p>
               </CardContent>
@@ -134,7 +138,7 @@ export default function ClientPanel() {
         </aside>
 
         <main className="flex-1 p-4 md:p-8 space-y-8 overflow-auto">
-          <section className="rounded-2xl overflow-hidden border bg-card">
+          <section id="inicio" className="rounded-2xl overflow-hidden border bg-card scroll-mt-20">
             <div className="p-6 md:p-8 bg-gradient-to-r from-primary via-primary to-orange-500 text-primary-foreground">
               <p className="text-xs uppercase tracking-widest opacity-85 mb-2">Bora pedir?</p>
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -193,9 +197,9 @@ export default function ClientPanel() {
           </section>
 
           {!isLoading && featured.length > 0 && (
-            <section className="space-y-4">
+            <section id="achadinhos" className="space-y-4 scroll-mt-20">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Lojas que estão bombando</h2>
+                <h2 className="text-xl font-bold">Achadinhos do dia</h2>
                 <Badge variant="secondary">{featured.length} selecionada(s)</Badge>
               </div>
 
@@ -222,7 +226,7 @@ export default function ClientPanel() {
             </section>
           )}
 
-          <section className="space-y-4">
+          <section id="explorar-lojas" className="space-y-4 scroll-mt-20">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-xl font-bold">Explorar lojas</h2>
               <p className="text-sm text-muted-foreground">{filteredEstablishments.length} resultado(s)</p>
@@ -247,7 +251,7 @@ export default function ClientPanel() {
             ) : filteredEstablishments.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
-                  Nada por aqui com esse filtro. Tenta outro termo.
+                  Nada por aqui com esse filtro. Tente outro termo.
                 </CardContent>
               </Card>
             ) : (
@@ -322,3 +326,4 @@ export default function ClientPanel() {
     </div>
   );
 }
+

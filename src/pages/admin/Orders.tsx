@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -236,7 +236,7 @@ export default function Orders() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold">Central de pedidos</h1>
-          <p className="text-muted-foreground">Atualizacao em tempo real para voce tocar a operacao sem atraso.</p>
+          <p className="text-muted-foreground">Atualização em tempo real para você tocar a operação no ritmo certo.</p>
         </div>
       </div>
 
@@ -287,9 +287,9 @@ export default function Orders() {
             <Button variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={page <= 1 || ordersQuery.isFetching}>
               Anterior
             </Button>
-            <span className="text-sm">Pagina {page} de {totalPages}</span>
+            <span className="text-sm">Página {page} de {totalPages}</span>
             <Button variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={page >= totalPages || ordersQuery.isFetching}>
-              Proxima
+              Próxima
             </Button>
           </div>
         </CardContent>
@@ -363,7 +363,21 @@ export default function Orders() {
                               </div>
                             )}
 
-                            <p className="text-sm font-semibold text-primary">{formatCurrency(Number(order.total))}</p>
+                            <div className="space-y-1">
+                              {Number(order.discount_amount || 0) > 0 && (
+                                <>
+                                  <p className="text-xs text-muted-foreground">
+                                    Subtotal: {formatCurrency(Number(order.subtotal || order.total))}
+                                  </p>
+                                  <p className="text-xs text-emerald-600">
+                                    Desconto{order.coupon_code ? ` (${order.coupon_code})` : ""}: -{formatCurrency(Number(order.discount_amount))}
+                                  </p>
+                                </>
+                              )}
+                              <p className="text-sm font-semibold text-primary">
+                                Total: {formatCurrency(Number(order.total))}
+                              </p>
+                            </div>
 
                             <div className="flex gap-2 flex-wrap">
                               {nextStatus && (
@@ -372,7 +386,7 @@ export default function Orders() {
                                   className="h-8 text-xs"
                                   onClick={() => updateStatus.mutate({ id: order.id, status: nextStatus })}
                                 >
-                                  Avancar para {ORDER_STATUS_LABELS[nextStatus]}
+                                  Avançar para {ORDER_STATUS_LABELS[nextStatus]}
                                 </Button>
                               )}
                               {order.status !== "delivered" && (
@@ -400,7 +414,7 @@ export default function Orders() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center justify-between">
-                  <span>Historico de cancelamentos</span>
+                  <span>Histórico de cancelamentos</span>
                   <span className="text-xs text-muted-foreground">{cancelledOrders.length}</span>
                 </CardTitle>
               </CardHeader>
@@ -422,3 +436,4 @@ export default function Orders() {
     </div>
   );
 }
+

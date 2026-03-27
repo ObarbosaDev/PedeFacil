@@ -1,31 +1,82 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, MessageCircle, BarChart3, Star, ArrowRight, Store, Clock3, BadgeCheck, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  ShoppingBag,
+  MessageCircle,
+  BarChart3,
+  Star,
+  ArrowRight,
+  Store,
+  Clock3,
+  BadgeCheck,
+  Sparkles,
+  Check,
+} from "lucide-react";
 
 const features = [
   {
     icon: ShoppingBag,
-    title: "Cardapio que vende",
-    desc: "Seu cliente escolhe, adiciona no carrinho e fecha o pedido sem complicacao.",
+    title: "Cardápio que vende",
+    desc: "Seu cliente escolhe, monta o carrinho e fecha o pedido sem dor de cabeça.",
   },
   {
     icon: MessageCircle,
     title: "Pedido no WhatsApp",
-    desc: "O pedido ja sai formatado e pronto para voce responder mais rapido.",
+    desc: "O pedido já chega formatado para você responder rápido, sem bagunça.",
   },
   {
     icon: BarChart3,
-    title: "Painel com visao real",
-    desc: "Acompanhe pedidos, faturamento e operacao sem planilha improvisada.",
+    title: "Painel com visão real",
+    desc: "Acompanhe pedidos, faturamento e operação em tempo real.",
   },
   {
     icon: Star,
     title: "Clientes VIP",
-    desc: "Fidelidade com pontos para trazer o cliente de volta com frequencia.",
+    desc: "Programa de pontos para o cliente voltar e pedir de novo.",
+  },
+];
+
+const pricingPlans = [
+  {
+    name: "Essencial",
+    price: "R$ 79/mês",
+    highlight: "Para começar",
+    perks: ["Cardápio digital completo", "Pedidos no WhatsApp", "Painel de pedidos em tempo real"],
+  },
+  {
+    name: "Profissional",
+    price: "R$ 149/mês",
+    highlight: "Mais escolhido",
+    perks: ["Tudo do Essencial", "Cupons e campanhas", "Ranking e relatórios avançados"],
+  },
+  {
+    name: "Premium",
+    price: "R$ 249/mês",
+    highlight: "Escala com suporte",
+    perks: ["Tudo do Profissional", "Atendimento prioritário", "Acompanhamento de performance"],
   },
 ];
 
 export default function LandingPage() {
+  const { data: demoStore } = useQuery({
+    queryKey: ["landing-demo-store"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("establishments")
+        .select("slug, name")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      return data?.[0] || null;
+    },
+  });
+
+  const demoHref = demoStore ? `/loja/${demoStore.slug}` : "/cliente";
+
   return (
     <div className="min-h-screen bg-background">
       <div className="fixed inset-0 -z-10 pointer-events-none">
@@ -37,7 +88,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-1">
             <span className="text-2xl font-extrabold text-primary">Pede</span>
-            <span className="text-2xl font-extrabold">Facil</span>
+            <span className="text-2xl font-extrabold">Fácil</span>
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -47,8 +98,8 @@ export default function LandingPage() {
             <Link to="/login">
               <Button variant="ghost" className="rounded-full">Entrar</Button>
             </Link>
-            <Link to="/registro">
-              <Button className="rounded-full">Cadastrar loja</Button>
+            <Link to="#planos">
+              <Button className="rounded-full">Ver planos lojista</Button>
             </Link>
           </div>
         </div>
@@ -59,26 +110,26 @@ export default function LandingPage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm font-medium mb-5">
               <Sparkles className="h-4 w-4 text-primary" />
-              Plataforma feita para negocio de comida local
+              Plataforma feita para negócios locais de comida
             </div>
 
             <h1 className="text-4xl md:text-6xl font-black leading-tight">
-              Seu delivery mais profissional, sem perder o jeito da sua marca.
+              Seu delivery profissional, sem perder a cara da sua marca.
             </h1>
 
             <p className="text-lg text-muted-foreground mt-5 max-w-xl">
-              Crie seu cardapio digital, receba pedidos no WhatsApp e gerencie tudo em um painel bonito e pratico.
+              Crie seu cardápio digital, receba pedidos no WhatsApp e gerencie tudo em um painel bonito e prático.
             </p>
 
             <div className="flex flex-wrap gap-3 mt-7">
-              <Link to="/registro">
+              <Link to="#planos">
                 <Button size="lg" className="h-12 px-6 text-base rounded-full">
-                  Quero vender agora <ArrowRight className="ml-2 h-4 w-4" />
+                  Ver planos para lojista <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
               <Link to="/cliente">
                 <Button size="lg" variant="outline" className="h-12 px-6 text-base rounded-full">
-                  Ver lojas disponiveis
+                  Ver lojas abertas
                 </Button>
               </Link>
             </div>
@@ -86,22 +137,26 @@ export default function LandingPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-8">
               <div className="rounded-xl border bg-card p-3">
                 <p className="text-xs text-muted-foreground">Setup</p>
-                <p className="text-lg font-bold">Rapido</p>
+                <p className="text-lg font-bold">Rápido</p>
               </div>
               <div className="rounded-xl border bg-card p-3">
                 <p className="text-xs text-muted-foreground">Pedidos</p>
                 <p className="text-lg font-bold">Em tempo real</p>
               </div>
               <div className="rounded-xl border bg-card p-3 col-span-2 sm:col-span-1">
-                <p className="text-xs text-muted-foreground">Suporte</p>
-                <p className="text-lg font-bold">Fluxo simples</p>
+                <p className="text-xs text-muted-foreground">Operação</p>
+                <p className="text-lg font-bold">Sem enrolação</p>
               </div>
             </div>
+
+            <p className="text-sm text-muted-foreground mt-4">
+              Cliente compra de graça. Plano pago é só para lojista/comerciante.
+            </p>
           </div>
 
           <div className="space-y-4">
             <div className="rounded-2xl border bg-card p-5 shadow-sm">
-              <p className="text-sm text-muted-foreground">Visao do lojista</p>
+              <p className="text-sm text-muted-foreground">Visão do lojista</p>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div className="rounded-lg border p-3">
                   <Store className="h-4 w-4 text-primary mb-1" />
@@ -115,19 +170,21 @@ export default function LandingPage() {
                 </div>
                 <div className="rounded-lg border p-3 col-span-2">
                   <Clock3 className="h-4 w-4 text-orange-500 mb-1" />
-                  <p className="text-xs text-muted-foreground">Tempo medio de atendimento</p>
+                  <p className="text-xs text-muted-foreground">Tempo médio de atendimento</p>
                   <p className="text-xl font-bold">22 min</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-2xl border bg-gradient-to-r from-primary to-orange-500 text-white p-5">
-              <p className="text-sm opacity-90">Demo rapida</p>
+              <p className="text-sm opacity-90">Demo ao vivo</p>
               <h3 className="text-2xl font-black mt-1">Quer ver funcionando agora?</h3>
-              <p className="opacity-90 mt-2">Abre uma loja teste, monta o carrinho e simula o pedido em menos de 1 minuto.</p>
-              <Link to="/loja/hamburgueria-do-joao" className="inline-block mt-4">
+              <p className="opacity-90 mt-2">
+                Abre uma loja real de teste, monta o carrinho e simula um pedido em menos de 1 minuto.
+              </p>
+              <Link to={demoHref} className="inline-block mt-4">
                 <Button variant="secondary" className="rounded-full">
-                  Abrir demonstracao
+                  {demoStore ? `Abrir demo da ${demoStore.name}` : "Explorar lojas agora"}
                 </Button>
               </Link>
             </div>
@@ -135,14 +192,52 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="planos" className="max-w-6xl mx-auto px-4 py-14 scroll-mt-24">
+        <div className="rounded-2xl border bg-card p-6 md:p-8 mb-6">
+          <p className="text-sm text-muted-foreground">Planos e valores</p>
+          <h2 className="text-3xl md:text-4xl font-black mt-1">Cliente entra grátis. Comerciante assina plano.</h2>
+          <p className="text-muted-foreground mt-2">
+            O acesso de cliente é livre para comprar. Para usar o painel de lojista, escolha um plano.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {pricingPlans.map((plan, index) => (
+            <div
+              key={plan.name}
+              className={`rounded-2xl border bg-card p-6 ${index === 1 ? "border-primary shadow-md" : ""}`}
+            >
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{plan.highlight}</p>
+              <h3 className="text-2xl font-black mt-1">{plan.name}</h3>
+              <p className="text-3xl font-black text-primary mt-4">{plan.price}</p>
+
+              <div className="space-y-2 mt-5">
+                {plan.perks.map((perk) => (
+                  <p key={perk} className="text-sm flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <span>{perk}</span>
+                  </p>
+                ))}
+              </div>
+
+              <Link to="/registro" className="block mt-6">
+                <Button className="w-full rounded-full">
+                  Quero esse plano
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="max-w-6xl mx-auto px-4 py-14">
         <div className="flex items-end justify-between gap-4 flex-wrap mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Recursos principais</p>
-            <h2 className="text-3xl md:text-4xl font-black">Tudo para vender sem dor de cabeca</h2>
+            <h2 className="text-3xl md:text-4xl font-black">Tudo para vender sem dor de cabeça</h2>
           </div>
-          <Link to="/registro">
-            <Button variant="outline" className="rounded-full">Comecar gratis</Button>
+          <Link to="#planos">
+            <Button variant="outline" className="rounded-full">Comparar planos</Button>
           </Link>
         </div>
 
@@ -161,14 +256,14 @@ export default function LandingPage() {
 
       <section className="max-w-6xl mx-auto px-4 pb-16">
         <div className="rounded-3xl border bg-card p-8 md:p-12 text-center">
-          <h2 className="text-3xl md:text-5xl font-black">Seu negocio pronto para vender online hoje.</h2>
+          <h2 className="text-3xl md:text-5xl font-black">Sua loja pronta para vender online hoje.</h2>
           <p className="text-muted-foreground text-lg mt-4 max-w-2xl mx-auto">
-            Se quiser algo simples para operar e forte para crescer, esse painel foi feito para voce.
+            Se você quer algo simples para operar e forte para crescer, esse painel foi feito para você.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap mt-8">
-            <Link to="/registro">
+            <Link to="#planos">
               <Button size="lg" className="h-12 rounded-full px-7">
-                Criar minha conta
+                Ver planos de lojista
               </Button>
             </Link>
             <Link to="/cliente">
@@ -181,8 +276,9 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        <p>� {new Date().getFullYear()} PedeFacil. Todos os direitos reservados.</p>
+        <p>© {new Date().getFullYear()} PedeFácil. Todos os direitos reservados.</p>
       </footer>
     </div>
   );
 }
+

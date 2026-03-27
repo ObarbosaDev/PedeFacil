@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,7 +66,7 @@ export default function StoreSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-establishment"] });
-      toast.success("Loja salva com sucesso!");
+      toast.success("Loja salva com sucesso.");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -93,9 +93,9 @@ export default function StoreSettings() {
 
       const { data } = supabase.storage.from("product-images").getPublicUrl(filePath);
       setForm((prev) => ({ ...prev, logo_url: data.publicUrl }));
-      toast.success("Logo enviado com sucesso!");
+      toast.success("Logo enviado com sucesso.");
     } catch (err: any) {
-      toast.error(err.message || "Nao foi possivel enviar o logo.");
+      toast.error(err.message || "Não foi possível enviar o logo.");
     } finally {
       setUploadingLogo(false);
     }
@@ -133,7 +133,7 @@ export default function StoreSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Nome da Loja *</Label>
+            <Label>Nome da loja *</Label>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Hamburgueria do João" />
           </div>
           <div>
@@ -166,7 +166,7 @@ export default function StoreSettings() {
               disabled={uploadingLogo}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              {uploadingLogo ? "Enviando logo..." : "Formatos: JPG, PNG ou WEBP. Tamanho maximo: 3MB."}
+              {uploadingLogo ? "Enviando logo..." : "Formatos: JPG, PNG ou WEBP. Tamanho máximo: 3MB."}
             </p>
           </div>
           {form.logo_url && (
@@ -182,3 +182,4 @@ export default function StoreSettings() {
     </div>
   );
 }
+

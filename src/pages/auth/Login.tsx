@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowRight, BarChart3, MessageCircle, ShieldCheck, Store } from "lucide-react";
 
 const loginSchema = z.object({
-  email: z.string().trim().email("Email invalido"),
+  email: z.string().trim().email("E-mail inválido"),
   password: z.string().min(1, "Digite sua senha"),
 });
 
@@ -34,7 +34,7 @@ export default function Login() {
     const now = Date.now();
     if (blockedUntil && now < blockedUntil) {
       const waitSeconds = Math.ceil((blockedUntil - now) / 1000);
-      toast.error(`Muitas tentativas. Aguarde ${waitSeconds}s para tentar novamente.`);
+      toast.error(`Muitas tentativas. Aguarde ${waitSeconds}s para tentar de novo.`);
       return;
     }
 
@@ -44,14 +44,14 @@ export default function Login() {
       setFailedAttempts(0);
       setBlockedUntil(null);
       navigate("/admin");
-    } catch (err: any) {
+    } catch {
       const nextFailedAttempts = failedAttempts + 1;
       setFailedAttempts(nextFailedAttempts);
       if (nextFailedAttempts >= 5) {
         const cooldownMs = 30_000;
         setBlockedUntil(Date.now() + cooldownMs);
       }
-      toast.error("Nao foi possivel entrar. Confira email e senha.");
+      toast.error("Não foi possível entrar. Confere seu e-mail e senha.");
     } finally {
       setLoading(false);
     }
@@ -70,27 +70,27 @@ export default function Login() {
             <div>
               <Link to="/" className="inline-flex items-center gap-1 mb-8">
                 <span className="text-3xl font-black">Pede</span>
-                <span className="text-3xl font-black">Facil</span>
+                <span className="text-3xl font-black">Fácil</span>
               </Link>
 
               <h1 className="text-4xl font-black leading-tight">Seu painel de pedidos, do jeito certo.</h1>
               <p className="mt-4 text-lg opacity-90 max-w-md">
-                Entre para acompanhar pedidos, atualizar cardapio e manter sua operacao fluindo.
+                Entre para acompanhar os pedidos, atualizar o cardápio e tocar a operação sem sufoco.
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
                 <MessageCircle className="h-5 w-5" />
-                <p>Pedido chega no WhatsApp ja organizado.</p>
+                <p>Pedido chega no WhatsApp já organizadinho.</p>
               </div>
               <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
                 <BarChart3 className="h-5 w-5" />
-                <p>Visao em tempo real da sua operacao.</p>
+                <p>Visão em tempo real da sua operação.</p>
               </div>
               <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
                 <ShieldCheck className="h-5 w-5" />
-                <p>Dados protegidos e acesso por conta.</p>
+                <p>Dados protegidos e acesso seguro.</p>
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function Login() {
               <div className="lg:hidden mb-6">
                 <Link to="/" className="inline-flex items-center gap-1">
                   <span className="text-2xl font-black text-primary">Pede</span>
-                  <span className="text-2xl font-black">Facil</span>
+                  <span className="text-2xl font-black">Fácil</span>
                 </Link>
               </div>
 
@@ -122,7 +122,7 @@ export default function Login() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>E-mail</FormLabel>
                         <FormControl>
                           <Input type="email" placeholder="seunome@empresa.com" {...field} />
                         </FormControl>
@@ -158,9 +158,9 @@ export default function Login() {
               </Form>
 
               <p className="text-center text-sm text-muted-foreground mt-6">
-                Ainda nao tem conta?{" "}
+                Ainda não tem conta?{" "}
                 <Link to="/registro" className="text-primary font-semibold hover:underline">
-                  Criar conta gratis
+                  Criar conta grátis
                 </Link>
               </p>
             </CardContent>
@@ -170,3 +170,4 @@ export default function Login() {
     </div>
   );
 }
+

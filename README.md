@@ -35,6 +35,8 @@ Objetivo do produto:
 - Pedidos em Kanban com avancar status e cancelamento
 - Configuracoes da loja
 - Fidelidade por pontos
+- Cupons de desconto
+- Automacao de WhatsApp (webhook + templates + fila de eventos)
 
 ### 2.3 Plataforma
 
@@ -66,8 +68,12 @@ Fluxo alternativo:
 
 - Node.js 18+
 - npm 9+
+- Java 11
+- Maven 3.9+
 
 ## 6. Quick Start
+
+### 6.1 Frontend
 
 ```bash
 npm install
@@ -77,6 +83,16 @@ npm run dev
 Aplicacao local padrao:
 
 - http://localhost:5173
+
+### 6.2 Backend Java 11 (sem Docker)
+
+```bash
+npm run backend:dev
+```
+
+Backend local padrao:
+
+- http://localhost:8080
 
 ## 7. Environment Variables
 
@@ -96,6 +112,9 @@ Observacoes:
 ## 8. Scripts
 
 - `npm run dev`: sobe ambiente local (Vite)
+- `npm run backend:dev`: sobe o receiver Java 11 (Spring Boot)
+- `npm run backend:build`: gera o jar do backend Java
+- `npm run backend:test`: roda os testes do backend Java
 - `npm run build`: build de producao
 - `npm run build:dev`: build com modo development
 - `npm run preview`: preview local do build
@@ -120,6 +139,10 @@ Observacoes:
 - `orders`
 - `order_items`
 - `loyalty_accounts`
+- `coupons`
+- `whatsapp_automation_settings`
+- `whatsapp_message_templates`
+- `whatsapp_automation_events`
 
 ### 9.3 Security (RLS)
 
@@ -147,10 +170,142 @@ Observacoes:
 - `/admin/pedidos`
 - `/admin/produtos`
 - `/admin/categorias`
+- `/admin/cupons`
+- `/admin/automacoes`
 - `/admin/loja`
 - `/admin/fidelidade`
 
-## 11. Project Structure
+## 11. Automacao WhatsApp
+
+### 11.1 O que foi implementado
+
+- Configuracao por loja (`whatsapp_automation_settings`)
+- Templates por evento (`whatsapp_message_templates`)
+- Fila de eventos (`whatsapp_automation_events`)
+- Trigger no banco para enfileirar evento em:
+  - novo pedido
+  - mudanca de status do pedido
+- Worker via Edge Function:
+  - `supabase/functions/whatsapp-automation-worker/index.ts`
+  - processa pendentes/failed
+  - monta mensagem via template
+  - dispara para webhook
+  - atualiza status para `sent` ou `failed`
+
+### 11.2 Como ativar
+
+1. Aplicar migrations no Supabase (inclui `20260327160000_whatsapp_automation_base.sql`).
+2. Publicar Edge Function:
+
+```bash
+supabase functions deploy whatsapp-automation-worker
+```
+
+3. Configurar secret opcional para proteger execucao manual/cron:
+
+```bash
+supabase secrets set AUTOMATION_RUNNER_TOKEN="seu_token_forte"
+```
+
+4. No painel do lojista (`/admin/automacoes`):
+  - habilitar automacao
+  - informar `webhook_url`
+  - ajustar templates
+
+### 11.3 Execucao manual (teste)
+
+```bash
+curl -X POST "https://<project-ref>.functions.supabase.co/whatsapp-automation-worker" \
+  -H "Content-Type: application/json" \
+  -H "x-automation-runner-token: <AUTOMATION_RUNNER_TOKEN>" \
+  -d '{"limit":20}'
+```
+
+### 11.4 Sugestao de cron
+
+- Rodar a cada 1 minuto (GitHub Actions, cron externo, n8n ou scheduler do seu backend)
+- Chamar a Edge Function com token
+- Limite recomendado por ciclo: `20` a `50` eventos
+
+### 11.5 Receiver Java 11 pronto (webhook/provedor)
+
+Arquivos:
+
+- `backend/pom.xml`
+- `backend/src/main/java/com/pedefacil/automation/AutomationReceiverApplication.java`
+- `backend/src/main/resources/application.yml`
+- `backend/.env.example`
+
+Executar:
+
+```bash
+npm run backend:dev
+```
+
+Endpoints:
+
+- `POST /webhook/pedefacil`
+- `GET /health`
+
+Como configurar (sem Docker):
+
+1. Ajuste as variaveis de ambiente com base em `backend/.env.example` (arquivo de referencia).
+2. Rode o backend com Java 11 e Maven.
+3. Em `/admin/automacoes`, configure:
+   - `Webhook URL`: `https://seu-dominio.com/webhook/pedefacil`
+   - `Webhook secret`: mesmo valor de `PEDEFACIL_SIGNATURE_SECRET`
+4. Ative a automacao.
+
+Exemplo no PowerShell:
+
+```bash
+$env:OUTBOUND_MODE="log"
+$env:PEDEFACIL_SIGNATURE_SECRET="sua_chave_forte"
+npm run backend:dev
+```
+
+Modos suportados no receiver Java:
+
+- `OUTBOUND_MODE=webhook` (encaminha para endpoint proprio)
+- `OUTBOUND_MODE=evolution` (envia para Evolution API)
+- `OUTBOUND_MODE=zapi` (envia para Z-API)
+- `OUTBOUND_MODE=log` (somente log local para testes)
+
+### 11.6 Receiver Node (legado)
+
+Arquivo:
+
+- `automation/whatsapp-receiver.mjs`
+
+Template de env:
+
+- `automation/.env.example`
+
+Executar:
+
+```bash
+npm run automation:receiver
+```
+
+Endpoint do receiver:
+
+- `POST /webhook/pedefacil`
+- `GET /health`
+
+Como plugar com o painel (`/admin/automacoes`):
+
+1. Em `Webhook URL`, coloque a URL publica do receiver + rota:
+   - `https://seu-dominio.com/webhook/pedefacil`
+2. Em `Webhook secret`, use o mesmo valor de `PEDEFACIL_SIGNATURE_SECRET`.
+3. Salve as configuracoes e ative a automacao.
+
+Modos suportados no receiver:
+
+- `OUTBOUND_MODE=webhook` (encaminha para um endpoint seu)
+- `OUTBOUND_MODE=evolution` (envia para Evolution API)
+- `OUTBOUND_MODE=zapi` (envia para Z-API)
+- `OUTBOUND_MODE=log` (somente loga no console para teste)
+## 12. Project Structure
 
 ```text
 src/
@@ -171,7 +326,7 @@ src/
 `-- test/
 ```
 
-## 12. Deploy (Lovable + GitHub)
+## 13. Deploy (Lovable + GitHub)
 
 Fluxo recomendado:
 
@@ -187,7 +342,7 @@ git commit -m "feat: update"
 git push origin main
 ```
 
-## 13. Production Checklist
+## 14. Production Checklist
 
 Antes de publicar:
 
@@ -198,7 +353,7 @@ Antes de publicar:
 - Validar fluxo cliente completo (menu -> checkout -> pedido)
 - Validar fluxo lojista (kanban e atualizacao de status)
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 ### `npm` bloqueado no PowerShell (ExecutionPolicy)
 
@@ -221,7 +376,7 @@ npm install
 - Verifique politicas RLS e tabelas no Supabase
 - Garanta que existam estabelecimentos ativos (`is_active = true`)
 
-## 15. Future Improvements
+## 16. Future Improvements
 
 - Drag-and-drop real no Kanban
 - Endereco de entrega estruturado no checkout
@@ -229,6 +384,6 @@ npm install
 - Notificacoes em tempo real para pedidos
 - Telemetria e metricas de conversao
 
-## 16. License
+## 17. License
 
 Uso interno/proprietario (ajuste esta secao para sua licenca oficial quando necessario).

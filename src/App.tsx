@@ -20,6 +20,8 @@ const Categories = lazy(() => import("./pages/admin/Categories"));
 const Orders = lazy(() => import("./pages/admin/Orders"));
 const StoreSettings = lazy(() => import("./pages/admin/StoreSettings"));
 const Loyalty = lazy(() => import("./pages/admin/Loyalty"));
+const Coupons = lazy(() => import("./pages/admin/Coupons"));
+const Automations = lazy(() => import("./pages/admin/Automations"));
 const PublicMenu = lazy(() => import("./pages/public/PublicMenu"));
 const Checkout = lazy(() => import("./pages/public/Checkout"));
 const ClientPanel = lazy(() => import("./pages/client/ClientPanel"));
@@ -71,6 +73,8 @@ const App = () => (
                   <Route path="pedidos" element={<Orders />} />
                   <Route path="loja" element={<StoreSettings />} />
                   <Route path="fidelidade" element={<Loyalty />} />
+                  <Route path="cupons" element={<Coupons />} />
+                  <Route path="automacoes" element={<Automations />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

@@ -1,7 +1,18 @@
-import { Outlet, Navigate, Link, useLocation } from "react-router-dom";
+﻿import { Outlet, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import AdminSidebar from "./AdminSidebar";
-import { LayoutDashboard, ShoppingBag, FolderOpen, ClipboardList, Store, Star, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  FolderOpen,
+  ClipboardList,
+  Store,
+  Star,
+  Menu,
+  X,
+  TicketPercent,
+  Bot,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +21,8 @@ const navItems = [
   { label: "Pedidos", icon: ClipboardList, path: "/admin/pedidos" },
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos" },
   { label: "Seções", icon: FolderOpen, path: "/admin/categorias" },
+  { label: "Cupons", icon: TicketPercent, path: "/admin/cupons" },
+  { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja" },
   { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade" },
 ];

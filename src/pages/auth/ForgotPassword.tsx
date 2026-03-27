@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowRight, Mail, ShieldCheck } from "lucide-react";
 
 const schema = z.object({
-  email: z.string().trim().email("Email inválido"),
+  email: z.string().trim().email("E-mail inválido"),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -30,9 +30,9 @@ export default function ForgotPassword() {
     try {
       setLoading(true);
       await resetPassword(data.email);
-      toast.success("Se o email estiver cadastrado, o link de recuperação já está a caminho.");
+      toast.success("Se o e-mail estiver cadastrado, o link de recuperação já está a caminho.");
     } catch (err: any) {
-      toast.success("Se o email estiver cadastrado, o link de recuperação já está a caminho.");
+      toast.success("Se o e-mail estiver cadastrado, o link de recuperação já está a caminho.");
     } finally {
       setLoading(false);
     }
@@ -76,10 +76,10 @@ export default function ForgotPassword() {
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Lembrou da senha?{" "}
-                <Link to="/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
+            <Link to="/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
               Voltar para o login <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </p>
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

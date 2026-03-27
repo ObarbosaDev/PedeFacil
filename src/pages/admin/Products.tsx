@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -131,7 +131,7 @@ export default function Products() {
       setForm((prev) => ({ ...prev, image_url: data.publicUrl }));
       toast.success("Imagem enviada com sucesso!");
     } catch (err: any) {
-      toast.error(err.message || "Nao foi possivel enviar a imagem.");
+      toast.error(err.message || "não foi possível enviar a imagem.");
     } finally {
       setUploadingImage(false);
     }
@@ -193,7 +193,7 @@ export default function Products() {
                   disabled={uploadingImage}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  {uploadingImage ? "Enviando imagem..." : "Formatos: JPG, PNG ou WEBP. Tamanho maximo: 3MB."}
+                  {uploadingImage ? "Enviando imagem..." : "Formatos: JPG, PNG ou WEBP. Tamanho máximo: 3MB."}
                 </p>
               </div>
               {form.image_url && (
@@ -247,3 +247,5 @@ export default function Products() {
     </div>
   );
 }
+
+
