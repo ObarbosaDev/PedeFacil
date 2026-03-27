@@ -1,20 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import { formatCurrency, formatDate, ORDER_STATUS_LABELS } from "@/lib/formatters";
 import { toast } from "sonner";
-import { useState } from "react";
 
 const statusFlow = ["received", "confirmed", "in_preparation", "ready", "delivered"];
+const kanbanColumns = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 
 export default function Orders() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [filterStatus, setFilterStatus] = useState<string>("all");
 
   const { data: establishment } = useQuery({
     queryKey: ["my-establishment"],
@@ -50,7 +48,13 @@ export default function Orders() {
     },
   });
 
-  const filtered = filterStatus === "all" ? orders : orders.filter((o: any) => o.status === filterStatus);
+  const ordersByStatus = kanbanColumns.map((status) => ({
+    status,
+    label: ORDER_STATUS_LABELS[status],
+    orders: orders.filter((order: any) => order.status === status),
+  }));
+
+  const cancelledOrders = orders.filter((order: any) => order.status === "cancelled");
 
   if (!establishment) {
     return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro.</p>;
@@ -60,81 +64,121 @@ export default function Orders() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Pedidos</h1>
+          <h1 className="text-3xl font-bold">Pedidos (Kanban)</h1>
           <p className="text-muted-foreground">{orders.length} pedido(s)</p>
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(ORDER_STATUS_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      {filtered.length === 0 ? (
+      {orders.length === 0 ? (
         <p className="text-muted-foreground text-center py-12">Nenhum pedido encontrado.</p>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((order: any) => {
-            const currentIdx = statusFlow.indexOf(order.status);
-            const nextStatus = currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
+        <div className="space-y-6">
+          <div className="grid gap-4 lg:grid-cols-5">
+            {ordersByStatus.map((column) => (
+              <Card key={column.status} className="h-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between gap-2">
+                    <span>{column.label}</span>
+                    <span className="text-xs text-muted-foreground">{column.orders.length}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {column.orders.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-3">Sem pedidos</p>
+                  )}
 
-            return (
-              <Card key={order.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between flex-wrap gap-4">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg">{order.customer_name}</h3>
-                        <StatusBadge status={order.status} />
-                      </div>
-                      <p className="text-sm text-muted-foreground">📱 {order.customer_phone}</p>
-                      <p className="text-sm text-muted-foreground">📦 {order.order_type === "pickup" ? "Retirada" : "Entrega"}</p>
-                      {order.observation && <p className="text-sm text-muted-foreground">📝 {order.observation}</p>}
-                      <p className="text-xs text-muted-foreground mt-1">{formatDate(order.created_at)}</p>
+                  {column.orders.map((order: any) => {
+                    const currentIdx = statusFlow.indexOf(order.status);
+                    const nextStatus =
+                      currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
 
-                      {order.order_items && order.order_items.length > 0 && (
-                        <div className="mt-3 space-y-1">
-                          {order.order_items.map((item: any) => (
-                            <p key={item.id} className="text-sm">
-                              {item.quantity}x {item.product_name} — {formatCurrency(Number(item.unit_price) * item.quantity)}
+                    return (
+                      <Card key={order.id} className="border-dashed">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3 className="font-semibold text-sm">{order.customer_name}</h3>
+                              <p className="text-xs text-muted-foreground">{order.customer_phone}</p>
+                            </div>
+                            <StatusBadge status={order.status} />
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              {order.order_type === "pickup" ? "Retirada" : "Entrega"}
                             </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                            {order.observation && (
+                              <p className="text-xs text-muted-foreground line-clamp-2">{order.observation}</p>
+                            )}
+                          </div>
 
-                    <div className="text-right space-y-2">
-                      <p className="text-2xl font-bold text-primary">{formatCurrency(Number(order.total))}</p>
-                      {nextStatus && order.status !== "cancelled" && (
-                        <Button
-                          size="sm"
-                          onClick={() => updateStatus.mutate({ id: order.id, status: nextStatus })}
-                        >
-                          → {ORDER_STATUS_LABELS[nextStatus]}
-                        </Button>
-                      )}
-                      {order.status !== "cancelled" && order.status !== "delivered" && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="ml-2"
-                          onClick={() => updateStatus.mutate({ id: order.id, status: "cancelled" })}
-                        >
-                          Cancelar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                          {order.order_items && order.order_items.length > 0 && (
+                            <div className="space-y-1">
+                              {order.order_items.slice(0, 3).map((item: any) => (
+                                <p key={item.id} className="text-xs">
+                                  {item.quantity}x {item.product_name}
+                                </p>
+                              ))}
+                              {order.order_items.length > 3 && (
+                                <p className="text-xs text-muted-foreground">+{order.order_items.length - 3} item(ns)</p>
+                              )}
+                            </div>
+                          )}
+
+                          <p className="text-sm font-semibold text-primary">{formatCurrency(Number(order.total))}</p>
+
+                          <div className="flex gap-2 flex-wrap">
+                            {nextStatus && (
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => updateStatus.mutate({ id: order.id, status: nextStatus })}
+                              >
+                                Avancar: {ORDER_STATUS_LABELS[nextStatus]}
+                              </Button>
+                            )}
+                            {order.status !== "delivered" && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => updateStatus.mutate({ id: order.id, status: "cancelled" })}
+                              >
+                                Cancelar
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </CardContent>
               </Card>
-            );
-          })}
+            ))}
+          </div>
+
+          {cancelledOrders.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Cancelados</span>
+                  <span className="text-xs text-muted-foreground">{cancelledOrders.length}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {cancelledOrders.map((order: any) => (
+                  <div key={order.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-sm">{order.customer_name}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                    </div>
+                    <p className="text-sm font-semibold">{formatCurrency(Number(order.total))}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
