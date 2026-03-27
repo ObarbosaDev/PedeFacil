@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "backend:dev": "mvn -f backend/pom.xml spring-boot:run",
+    "backend:build": "mvn -f backend/pom.xml clean package",
+    "backend:test": "mvn -f backend/pom.xml test",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "automation:receiver": "node automation/whatsapp-receiver.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

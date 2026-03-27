@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -18,7 +18,7 @@ const schema = z
     confirmPassword: z.string().min(8, "Confirme sua senha"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas nao conferem",
+    message: "As senhas não conferem",
     path: ["confirmPassword"],
   });
 
@@ -36,7 +36,7 @@ export default function ResetPassword() {
 
   useEffect(() => {
     if (!authLoading && !session) {
-      toast.error("Link invalido ou expirado. Solicite outro link de recuperacao.");
+      toast.error("Link inválido ou expirado. Solicite outro link de recuperação.");
     }
   }, [authLoading, session]);
 
@@ -47,7 +47,7 @@ export default function ResetPassword() {
       toast.success("Senha atualizada com sucesso!");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err.message || "Nao foi possivel redefinir sua senha.");
+      toast.error(err.message || "Não foi possível redefinir sua senha.");
     } finally {
       setSaving(false);
     }
@@ -113,3 +113,4 @@ export default function ResetPassword() {
     </div>
   );
 }
+

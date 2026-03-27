@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -14,13 +14,13 @@ import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
 
 const registerSchema = z
   .object({
-    fullName: z.string().trim().min(2, "Minimo 2 caracteres").max(100),
-    email: z.string().trim().email("Email invalido"),
+    fullName: z.string().trim().min(2, "Mínimo 2 caracteres").max(100),
+    email: z.string().trim().email("E-mail inválido"),
     password: z.string().regex(passwordRegex, PASSWORD_RULE),
     confirmPassword: z.string().min(8, "Confirme sua senha"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas nao conferem.",
+    message: "As senhas não conferem.",
     path: ["confirmPassword"],
   });
 
@@ -40,10 +40,10 @@ export default function Register() {
     try {
       setLoading(true);
       await signUp(data.email, data.password, data.fullName.trim());
-      toast.success("Conta criada! Verifique seu email para confirmar.");
+      toast.success("Conta criada! Verifique seu e-mail para confirmar.");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err.message || "Nao foi possivel criar sua conta agora.");
+      toast.error(err.message || "Não foi possível criar sua conta agora.");
     } finally {
       setLoading(false);
     }
@@ -62,23 +62,23 @@ export default function Register() {
             <div>
               <Link to="/" className="inline-flex items-center gap-1 mb-8">
                 <span className="text-3xl font-black text-primary">Pede</span>
-                <span className="text-3xl font-black">Facil</span>
+                <span className="text-3xl font-black">Fácil</span>
               </Link>
 
               <h1 className="text-4xl font-black leading-tight">Coloque sua loja no jogo em poucos minutos.</h1>
               <p className="mt-4 text-lg text-zinc-300 max-w-md">
-                Crie sua conta, configure seu cardapio e comece a receber pedidos ainda hoje.
+                Crie sua conta, configure seu cardápio e comece a receber pedidos ainda hoje.
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
                 <Rocket className="h-5 w-5 text-primary" />
-                <p>Setup rapido, sem dor de cabeca.</p>
+                <p>Setup rápido, sem dor de cabeça.</p>
               </div>
               <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
                 <BadgeCheck className="h-5 w-5 text-emerald-400" />
-                <p>Painel pronto para operacao do dia a dia.</p>
+                <p>Painel pronto para o dia a dia da operação.</p>
               </div>
               <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
                 <Users className="h-5 w-5 text-orange-300" />
@@ -94,7 +94,7 @@ export default function Register() {
               <div className="lg:hidden mb-6">
                 <Link to="/" className="inline-flex items-center gap-1">
                   <span className="text-2xl font-black text-primary">Pede</span>
-                  <span className="text-2xl font-black">Facil</span>
+                  <span className="text-2xl font-black">Fácil</span>
                 </Link>
               </div>
 
@@ -104,7 +104,7 @@ export default function Register() {
                   Cadastro de lojista
                 </p>
                 <h2 className="text-2xl font-black mt-1">Criar minha conta</h2>
-                <p className="text-muted-foreground mt-1">Sem cartao de credito. So criar e comecar.</p>
+                <p className="text-muted-foreground mt-1">Sem cartão de crédito. É só criar e começar.</p>
               </div>
 
               <Form {...form}>
@@ -116,7 +116,7 @@ export default function Register() {
                       <FormItem>
                         <FormLabel>Nome completo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ex: Joao Silva" {...field} />
+                          <Input placeholder="Ex: João Silva" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -128,7 +128,7 @@ export default function Register() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>E-mail</FormLabel>
                         <FormControl>
                           <Input type="email" placeholder="seunome@empresa.com" {...field} />
                         </FormControl>
@@ -167,14 +167,14 @@ export default function Register() {
                   />
 
                   <Button type="submit" className="w-full h-11" disabled={loading}>
-                    {loading ? "Criando conta..." : "Criar conta gratis"}
+                    {loading ? "Criando conta..." : "Criar conta grátis"}
                     {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
                   </Button>
                 </form>
               </Form>
 
               <p className="text-center text-sm text-muted-foreground mt-6">
-                Ja tem conta?{" "}
+                Já tem conta?{" "}
                 <Link to="/login" className="text-primary font-semibold hover:underline">
                   Entrar agora
                 </Link>
@@ -186,3 +186,4 @@ export default function Register() {
     </div>
   );
 }
+
