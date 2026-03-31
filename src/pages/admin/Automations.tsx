@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/formatters";
+import { logAuditEvent } from "@/lib/observability";
 import { toast } from "sonner";
 import { Bot, MessageCircle, Save } from "lucide-react";
 
@@ -18,6 +19,8 @@ const templateDefinitions = [
   { key: "status_confirmed", label: "Status: confirmado", helper: "Dispara quando o pedido é confirmado." },
   { key: "status_in_preparation", label: "Status: em preparo", helper: "Dispara quando o pedido entra em preparo." },
   { key: "status_ready", label: "Status: pronto", helper: "Dispara quando o pedido fica pronto." },
+  { key: "delivery_accepted_by_driver", label: "Entregador aceitou", helper: "Dispara quando um entregador aceita a corrida." },
+  { key: "delivery_out_for_delivery", label: "Saiu para entrega", helper: "Dispara quando o entregador sai para rota." },
   { key: "status_delivered", label: "Status: entregue", helper: "Dispara quando o pedido é finalizado." },
   { key: "status_cancelled", label: "Status: cancelado", helper: "Dispara quando o pedido é cancelado." },
   { key: "out_of_hours", label: "Fora do horário", helper: "Mensagem para respostas fora do expediente." },
@@ -56,6 +59,8 @@ export default function Automations() {
     status_confirmed: { text: "", isActive: true },
     status_in_preparation: { text: "", isActive: true },
     status_ready: { text: "", isActive: true },
+    delivery_accepted_by_driver: { text: "", isActive: true },
+    delivery_out_for_delivery: { text: "", isActive: true },
     status_delivered: { text: "", isActive: true },
     status_cancelled: { text: "", isActive: true },
     out_of_hours: { text: "", isActive: true },
@@ -159,6 +164,21 @@ export default function Automations() {
         .from("whatsapp_automation_settings")
         .upsert(payload, { onConflict: "establishment_id" });
       if (error) throw error;
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "establishment",
+        entityId: establishment.id,
+        action: "automation_settings_saved",
+        metadata: {
+          automationEnabled: payload.is_enabled,
+          providerName: payload.provider_name,
+          sendOnNewOrder: payload.send_on_new_order,
+          sendOnStatusChange: payload.send_on_status_change,
+          sendOutOfHours: payload.send_out_of_hours,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-automation-settings"] });
@@ -187,6 +207,18 @@ export default function Automations() {
         .from("whatsapp_message_templates")
         .upsert(payload, { onConflict: "establishment_id,event_key" });
       if (error) throw error;
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "establishment",
+        entityId: establishment.id,
+        action: "automation_templates_saved",
+        metadata: {
+          activeTemplateCount: payload.filter((row) => row.is_active).length,
+          totalTemplateCount: payload.length,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-automation-templates"] });

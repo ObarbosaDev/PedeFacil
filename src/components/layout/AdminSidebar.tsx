@@ -10,6 +10,7 @@ import {
   Sparkles,
   TicketPercent,
   Bot,
+  Bike,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const navItems = [
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos" },
   { label: "Seções", icon: FolderOpen, path: "/admin/categorias" },
   { label: "Cupons", icon: TicketPercent, path: "/admin/cupons" },
+  { label: "Entregadores", icon: Bike, path: "/admin/entregadores" },
   { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja" },
   { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade" },

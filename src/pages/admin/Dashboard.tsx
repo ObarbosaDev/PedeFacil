@@ -86,6 +86,20 @@ export default function Dashboard() {
     enabled: !!establishment,
   });
 
+  const { data: funnelEvents = [] } = useQuery({
+    queryKey: ["dashboard-funnel-events", establishment?.id, periodStartIso],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("checkout_events")
+        .select("event_name, session_id, created_at")
+        .eq("establishment_id", establishment!.id)
+        .gte("created_at", periodStartIso);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
   useEffect(() => {
     if (!establishment?.id) return;
 
@@ -103,6 +117,7 @@ export default function Dashboard() {
           queryClient.invalidateQueries({ queryKey: ["dashboard-orders", establishment.id] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-period-orders", establishment.id] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-period-items", establishment.id] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-funnel-events", establishment.id] });
           queryClient.invalidateQueries({ queryKey: ["orders", establishment.id] });
         }
       )
@@ -149,6 +164,40 @@ export default function Dashboard() {
       topProducts,
     };
   }, [periodOrders, periodItems]);
+
+  const funnel = useMemo(() => {
+    const menuSessions = new Set<string>();
+    const cartSessions = new Set<string>();
+    const checkoutSessions = new Set<string>();
+    const submittedSessions = new Set<string>();
+
+    for (const event of funnelEvents as any[]) {
+      const sessionId = String(event.session_id || "");
+      if (!sessionId) continue;
+      if (event.event_name === "menu_view") menuSessions.add(sessionId);
+      if (event.event_name === "add_to_cart") cartSessions.add(sessionId);
+      if (event.event_name === "checkout_view") checkoutSessions.add(sessionId);
+      if (event.event_name === "order_submitted") submittedSessions.add(sessionId);
+    }
+
+    const menu = menuSessions.size;
+    const cart = cartSessions.size;
+    const checkout = checkoutSessions.size;
+    const submitted = submittedSessions.size;
+
+    const toPercent = (value: number, total: number) => (total > 0 ? (value / total) * 100 : 0);
+
+    return {
+      menu,
+      cart,
+      checkout,
+      submitted,
+      cartRate: toPercent(cart, menu),
+      checkoutRate: toPercent(checkout, cart),
+      submitRate: toPercent(submitted, checkout),
+      totalConversion: toPercent(submitted, menu),
+    };
+  }, [funnelEvents]);
 
   const exportOrdersCsv = () => {
     const header = ["id", "cliente", "telefone", "tipo", "status", "total", "criado_em"];
@@ -347,6 +396,56 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Funil de conversão</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Sessões no cardápio</p>
+              <p className="text-2xl font-bold">{funnel.menu}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Sessões com carrinho</p>
+              <p className="text-2xl font-bold">{funnel.cart}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Sessões no checkout</p>
+              <p className="text-2xl font-bold">{funnel.checkout}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Pedidos enviados</p>
+              <p className="text-2xl font-bold">{funnel.submitted}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Taxas de conversão</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Cardápio → Carrinho</span>
+              <span className="font-semibold">{funnel.cartRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Carrinho → Checkout</span>
+              <span className="font-semibold">{funnel.checkoutRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Checkout → Pedido</span>
+              <span className="font-semibold">{funnel.submitRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Conversão total</span>
+              <span className="font-semibold">{funnel.totalConversion.toFixed(1)}%</span>
+            </div>
           </CardContent>
         </Card>
       </section>

@@ -1,0 +1,6 @@
+com\pedefacil\automation\AutomationProperties.class
+com\pedefacil\automation\AutomationReceiverApplication.class
+com\pedefacil\automation\AutomationController.class
+META-INF\spring-configuration-metadata.json
+com\pedefacil\automation\OutboundService.class
+com\pedefacil\automation\SignatureService.class

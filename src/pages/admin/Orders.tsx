@@ -6,13 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import { formatCurrency, formatDate, ORDER_STATUS_LABELS } from "@/lib/formatters";
+import { logAuditEvent } from "@/lib/observability";
 import { toast } from "sonner";
 
 const statusFlow = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 const kanbanColumns = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 const pageSize = 50;
+
+const defaultSlaByStatus: Record<string, number> = {
+  received: 5,
+  confirmed: 10,
+  in_preparation: 25,
+  ready: 10,
+  delivered: 0,
+};
 
 const statusTone: Record<string, string> = {
   received: "border-l-blue-400",
@@ -50,9 +60,11 @@ export default function Orders() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "pickup" | "delivery">("all");
+  const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const hasBootstrappedOrders = useRef(false);
   const knownOrderIds = useRef<Set<string>>(new Set());
+  const autoRedispatchingOrderIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setPage(1);
@@ -65,6 +77,35 @@ export default function Orders() {
       return data;
     },
     enabled: !!user,
+  });
+
+  const { data: slaSettings } = useQuery({
+    queryKey: ["establishment-sla-settings", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("establishment_sla_settings")
+        .select("*")
+        .eq("establishment_id", establishment!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: deliveryDrivers = [] } = useQuery({
+    queryKey: ["delivery-drivers", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("delivery_drivers")
+        .select("*")
+        .eq("establishment_id", establishment!.id)
+        .eq("is_active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment,
   });
 
   const ordersQuery = useQuery({
@@ -125,6 +166,8 @@ export default function Orders() {
           queryClient.invalidateQueries({ queryKey: ["dashboard-period-orders", establishment.id] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-period-items", establishment.id] });
           queryClient.invalidateQueries({ queryKey: ["order-history", establishment.id] });
+          queryClient.invalidateQueries({ queryKey: ["order-deliveries", establishment.id] });
+          queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment.id] });
 
           if (payload.eventType === "INSERT") {
             const newest = payload.new;
@@ -166,8 +209,23 @@ export default function Orders() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const currentOrder = orders.find((order: any) => order.id === id);
       const { error } = await supabase.from("orders").update({ status: status as any }).eq("id", id);
       if (error) throw error;
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "order",
+        entityId: id,
+        action: "order_status_updated",
+        metadata: {
+          establishmentId: establishment?.id ?? null,
+          previousStatus: currentOrder?.status ?? null,
+          nextStatus: status,
+          orderTotal: Number(currentOrder?.total ?? 0),
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -176,7 +234,118 @@ export default function Orders() {
     },
   });
 
+  const dispatchDelivery = useMutation({
+    mutationFn: async ({ orderId, driverId }: { orderId: string; driverId: string }) => {
+      const selectedDriver = (deliveryDrivers as any[]).find((driver) => driver.id === driverId);
+      const { data: currentDelivery, error: currentDeliveryError } = await (supabase as any)
+        .from("order_deliveries")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (currentDeliveryError) throw currentDeliveryError;
+
+      const trackingToken = currentDelivery?.tracking_token || crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+      const confirmationCode = currentDelivery?.confirmation_code || String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+
+      const { error } = await (supabase as any).from("order_deliveries").upsert(
+        {
+          order_id: orderId,
+          establishment_id: establishment!.id,
+          driver_id: driverId,
+          status: "assigned",
+          assigned_at: new Date().toISOString(),
+          accepted_deadline_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          tracking_token: trackingToken,
+          confirmation_code: confirmationCode,
+          payout_amount: Number(selectedDriver?.payout_per_delivery || 0),
+          eta_minutes: 35,
+          accepted_at: null,
+          arrived_at_store_at: null,
+          picked_up_at: null,
+          delivered_at: null,
+          cancelled_at: null,
+        },
+        { onConflict: "order_id" }
+      );
+      if (error) throw error;
+
+      if (currentDelivery?.driver_id && currentDelivery.driver_id !== driverId) {
+        const { count: previousDriverActiveCount, error: previousDriverActiveCountError } = await (supabase as any)
+          .from("order_deliveries")
+          .select("id", { count: "exact", head: true })
+          .eq("driver_id", currentDelivery.driver_id)
+          .eq("establishment_id", establishment!.id)
+          .in("status", ["assigned", "accepted", "picked_up"])
+          .neq("order_id", orderId);
+        if (previousDriverActiveCountError) throw previousDriverActiveCountError;
+
+        await (supabase as any)
+          .from("delivery_drivers")
+          .update({
+            is_available: (previousDriverActiveCount || 0) === 0,
+            availability_mode: (previousDriverActiveCount || 0) === 0 ? "online" : "busy",
+          })
+          .eq("id", currentDelivery.driver_id);
+      }
+
+      await (supabase as any)
+        .from("delivery_drivers")
+        .update({
+          is_available: false,
+          availability_mode: "busy",
+        })
+        .eq("id", driverId);
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "order_delivery",
+        entityId: orderId,
+        action: "delivery_dispatched",
+        metadata: {
+          establishmentId: establishment?.id ?? null,
+          orderId,
+          driverId,
+          driverName: selectedDriver?.full_name || null,
+          confirmationCode,
+          trackingToken,
+          previousDriverId: currentDelivery?.driver_id || null,
+          redispatched: Boolean(currentDelivery),
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-deliveries"] });
+      queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment?.id] });
+      toast.success("Entrega despachada.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não foi possível despachar agora."),
+  });
+
   const orderIds = useMemo(() => orders.map((order: any) => order.id), [orders]);
+
+  const { data: orderDeliveries = [] } = useQuery({
+    queryKey: ["order-deliveries", establishment?.id, orderIds.join(",")],
+    queryFn: async () => {
+      if (!orderIds.length) return [];
+      const { data, error } = await (supabase as any)
+        .from("order_deliveries")
+        .select(`
+          *,
+          delivery_drivers:driver_id (
+            id,
+            full_name,
+            phone,
+            is_available
+          )
+        `)
+        .eq("establishment_id", establishment!.id)
+        .in("order_id", orderIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment && orderIds.length > 0,
+  });
 
   const { data: historyRows = [] } = useQuery({
     queryKey: ["order-history", establishment?.id, orderIds.join(",")],
@@ -205,6 +374,102 @@ export default function Orders() {
     return grouped;
   }, [historyRows]);
 
+  const deliveryByOrderId = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const delivery of orderDeliveries as any[]) {
+      map[delivery.order_id] = delivery;
+    }
+    return map;
+  }, [orderDeliveries]);
+
+  const activeDeliveriesByDriver = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const delivery of orderDeliveries as any[]) {
+      if (!["assigned", "accepted", "picked_up"].includes(delivery.status)) continue;
+      map[delivery.driver_id] = (map[delivery.driver_id] || 0) + 1;
+    }
+    return map;
+  }, [orderDeliveries]);
+
+  useEffect(() => {
+    if (!establishment?.id || !(orderDeliveries as any[]).length || !(deliveryDrivers as any[]).length) return;
+
+    const expiredAssignedDeliveries = (orderDeliveries as any[]).filter((delivery) => {
+      if (delivery.status !== "assigned" || !delivery.accepted_deadline_at) return false;
+      return new Date(delivery.accepted_deadline_at).getTime() < Date.now();
+    });
+
+    if (!expiredAssignedDeliveries.length) return;
+
+    const run = async () => {
+      for (const delivery of expiredAssignedDeliveries) {
+        if (autoRedispatchingOrderIds.current.has(delivery.order_id)) continue;
+
+        const candidateDrivers = [...(deliveryDrivers as any[])]
+          .filter((driver) => {
+            if (!driver.is_active) return false;
+            if (!["online", "busy"].includes(driver.availability_mode || "")) return false;
+            if (driver.id === delivery.driver_id) return false;
+            const currentLoad = activeDeliveriesByDriver[driver.id] || 0;
+            const capacity = Number(driver.max_active_deliveries || 1);
+            return currentLoad < capacity;
+          })
+          .sort((a, b) => {
+            const aLoad = activeDeliveriesByDriver[a.id] || 0;
+            const bLoad = activeDeliveriesByDriver[b.id] || 0;
+            if (a.availability_mode !== b.availability_mode) {
+              return a.availability_mode === "online" ? -1 : 1;
+            }
+            return aLoad - bLoad;
+          });
+
+        const bestDriver = candidateDrivers[0];
+        if (!bestDriver) continue;
+
+        autoRedispatchingOrderIds.current.add(delivery.order_id);
+
+        try {
+          await dispatchDelivery.mutateAsync({ orderId: delivery.order_id, driverId: bestDriver.id });
+          toast.info(`Rota redespachada automaticamente para ${bestDriver.full_name}.`);
+        } catch {
+          // erro ja tratado na mutation
+        } finally {
+          autoRedispatchingOrderIds.current.delete(delivery.order_id);
+        }
+      }
+    };
+
+    void run();
+  }, [activeDeliveriesByDriver, deliveryDrivers, dispatchDelivery, establishment?.id, orderDeliveries]);
+
+  const slaByStatus = useMemo(() => ({
+    received: Number(slaSettings?.received_minutes || defaultSlaByStatus.received),
+    confirmed: Number(slaSettings?.confirmed_minutes || defaultSlaByStatus.confirmed),
+    in_preparation: Number(slaSettings?.in_preparation_minutes || defaultSlaByStatus.in_preparation),
+    ready: Number(slaSettings?.ready_minutes || defaultSlaByStatus.ready),
+    delivered: 0,
+  }), [slaSettings]);
+
+  const getStatusStartedAt = (order: any) => {
+    const currentStatus = order.status;
+    if (currentStatus === "delivered" || currentStatus === "cancelled") return null;
+    const history = (historyByOrder[order.id] || []) as any[];
+    const match = history.find((event) => event.new_status === currentStatus);
+    return new Date(match?.changed_at || order.created_at);
+  };
+
+  const getSlaInfo = (order: any) => {
+    const status = order.status;
+    if (status === "delivered" || status === "cancelled") return null;
+    const limitMinutes = slaByStatus[status] || 0;
+    if (!limitMinutes) return null;
+    const startedAt = getStatusStartedAt(order);
+    if (!startedAt) return null;
+    const elapsedMinutes = Math.floor((Date.now() - startedAt.getTime()) / 60000);
+    const overtime = elapsedMinutes - limitMinutes;
+    return { elapsedMinutes, limitMinutes, overtime, isLate: overtime > 0 };
+  };
+
   const ordersByStatus = kanbanColumns.map((status) => ({
     status,
     label: ORDER_STATUS_LABELS[status],
@@ -221,8 +486,10 @@ export default function Orders() {
       inProgress,
       delivered,
       cancelled: cancelledOrders.length,
+      driversOnline: (deliveryDrivers as any[]).filter((driver) => driver.is_active && ["online", "busy"].includes(driver.availability_mode || "")).length,
+      deliveriesInRoute: (orderDeliveries as any[]).filter((delivery) => ["assigned", "accepted", "picked_up"].includes(delivery.status)).length,
     };
-  }, [orders, cancelledOrders.length, totalCount]);
+  }, [orders, cancelledOrders.length, totalCount, deliveryDrivers, orderDeliveries]);
 
   if (!establishment) {
     return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro.</p>;
@@ -273,11 +540,13 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold">{summary.total}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Em andamento</p><p className="text-2xl font-bold">{summary.inProgress}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregues</p><p className="text-2xl font-bold">{summary.delivered}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Cancelados</p><p className="text-2xl font-bold">{summary.cancelled}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Frota online</p><p className="text-2xl font-bold">{summary.driversOnline}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Rotas ativas</p><p className="text-2xl font-bold">{summary.deliveriesInRoute}</p></CardContent></Card>
       </div>
 
       <Card>
@@ -323,6 +592,23 @@ export default function Orders() {
                         currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
 
                       const timeline = (historyByOrder[order.id] || []).slice(0, 3);
+                      const slaInfo = getSlaInfo(order);
+                      const delivery = deliveryByOrderId[order.id];
+                      const isDeliveryOrder = order.order_type === "delivery";
+                      const selectedDriverId = selectedDriverByOrder[order.id] || delivery?.driver_id || "";
+                      const canDispatch = isDeliveryOrder && !["delivered", "cancelled"].includes(order.status);
+                      const sortedDrivers = [...(deliveryDrivers as any[])].sort((a, b) => {
+                        const loadA = activeDeliveriesByDriver[a.id] || 0;
+                        const loadB = activeDeliveriesByDriver[b.id] || 0;
+                        const freeA = loadA < Number(a.max_active_deliveries || 1);
+                        const freeB = loadB < Number(b.max_active_deliveries || 1);
+                        if (freeA !== freeB) return freeA ? -1 : 1;
+                        return loadA - loadB;
+                      });
+                      const acceptTimeoutExpired =
+                        delivery?.status === "assigned" &&
+                        delivery?.accepted_deadline_at &&
+                        new Date(delivery.accepted_deadline_at).getTime() < Date.now();
 
                       return (
                         <Card key={order.id} className="border-dashed">
@@ -339,6 +625,54 @@ export default function Orders() {
                               <p className="text-xs text-muted-foreground">{order.order_type === "pickup" ? "Retirada" : "Entrega"}</p>
                               <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
                               {order.observation && <p className="text-xs text-muted-foreground line-clamp-2">{order.observation}</p>}
+                              {delivery && (
+                                <div className="rounded-md border p-2 mt-1">
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Entregador: <span className="font-semibold text-foreground">{delivery.delivery_drivers?.full_name || "Sem nome"}</span>
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Status da rota: {delivery.status === "assigned" ? "Aguardando aceite" : delivery.status === "accepted" ? "Aceita" : delivery.status === "picked_up" ? "Saiu para entrega" : delivery.status}
+                                  </p>
+                                  {delivery.accepted_deadline_at && delivery.status === "assigned" && (
+                                    <p className={`text-[11px] ${acceptTimeoutExpired ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
+                                      Aceite ate: {formatDate(delivery.accepted_deadline_at)}
+                                    </p>
+                                  )}
+                                  {acceptTimeoutExpired && (
+                                    <p className="text-[11px] font-semibold text-destructive">
+                                      Aceite expirado. Vale redespachar para nao travar a rota.
+                                    </p>
+                                  )}
+                                  {delivery.confirmation_code && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      PIN final: <span className="font-semibold text-foreground">{delivery.confirmation_code}</span>
+                                    </p>
+                                  )}
+                                  {delivery.tracking_token && (
+                                    <p className="text-[11px] text-primary break-all">
+                                      Rastreamento: {window.location.origin}/acompanhar/{delivery.tracking_token}
+                                    </p>
+                                  )}
+                                  {delivery.issue_reason && (
+                                    <p className="text-[11px] text-amber-700">
+                                      Ocorrencia: <span className="font-semibold">{delivery.issue_reason}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              {slaInfo && (
+                                <div className="pt-1">
+                                  {slaInfo.isLate ? (
+                                    <Badge variant="destructive" className="text-[11px]">
+                                      SLA estourado em {slaInfo.overtime} min
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[11px]">
+                                      SLA no prazo ({slaInfo.limitMinutes - slaInfo.elapsedMinutes} min restantes)
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {timeline.length > 0 && (
@@ -380,6 +714,54 @@ export default function Orders() {
                             </div>
 
                             <div className="flex gap-2 flex-wrap">
+                              {canDispatch && (
+                                <>
+                                  <Select
+                                    value={selectedDriverId || "__none"}
+                                    onValueChange={(value) => setSelectedDriverByOrder((prev) => ({
+                                      ...prev,
+                                      [order.id]: value === "__none" ? "" : value,
+                                    }))}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs w-full">
+                                      <SelectValue placeholder="Selecionar entregador" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none">Selecionar entregador</SelectItem>
+                                      {sortedDrivers.map((driver) => (
+                                        <SelectItem key={driver.id} value={driver.id}>
+                                          {driver.full_name} • {activeDeliveriesByDriver[driver.id] || 0}/{driver.max_active_deliveries || 1}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs w-full"
+                                    onClick={() => {
+                                      if (!selectedDriverId) {
+                                        toast.error("Escolha um entregador.");
+                                        return;
+                                      }
+                                      const selectedDriver = (deliveryDrivers as any[]).find((driver) => driver.id === selectedDriverId);
+                                      const selectedDriverLoad = activeDeliveriesByDriver[selectedDriverId] || 0;
+                                      const selectedDriverCapacity = Number(selectedDriver?.max_active_deliveries || 1);
+                                      const isSameDriver = delivery?.driver_id === selectedDriverId;
+                                      if (!isSameDriver && selectedDriverLoad >= selectedDriverCapacity) {
+                                        toast.error("Esse entregador ja bateu o limite de corridas.");
+                                        return;
+                                      }
+                                      dispatchDelivery.mutate({ orderId: order.id, driverId: selectedDriverId });
+                                    }}
+                                    disabled={dispatchDelivery.isPending}
+                                  >
+                                    {acceptTimeoutExpired ? "Redespachar agora" : delivery ? "Reatribuir rota" : "Despachar para entregador"}
+                                  </Button>
+                                </>
+                              )}
+
                               {nextStatus && (
                                 <Button
                                   size="sm"

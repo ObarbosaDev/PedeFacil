@@ -20,6 +20,9 @@ interface WhatsAppOrderData {
   items: CartItem[];
   subtotal: number;
   discountAmount?: number;
+  deliveryFee?: number;
+  serviceFee?: number;
+  paymentMethod?: "pix" | "credit_card" | "debit_card" | "cash";
   couponCode?: string;
   total: number;
 }
@@ -41,10 +44,22 @@ export function generateWhatsAppMessage(data: WhatsAppOrderData): string {
     : "";
 
   const discountValue = Number(data.discountAmount || 0);
+  const deliveryFee = Number(data.deliveryFee || 0);
+  const serviceFee = Number(data.serviceFee || 0);
   const couponLine = data.couponCode && discountValue > 0 ? `*Cupom:* ${data.couponCode}\n` : "";
   const discountLine = discountValue > 0 ? `*Desconto:* -R$ ${discountValue.toFixed(2)}\n` : "";
+  const deliveryLine = deliveryFee > 0 ? `*Taxa de entrega:* R$ ${deliveryFee.toFixed(2)}\n` : "";
+  const serviceLine = serviceFee > 0 ? `*Taxa de serviço:* R$ ${serviceFee.toFixed(2)}\n` : "";
 
-  const message = `*Novo pedido - ${data.storeName}*\n\n*Cliente:* ${data.customerName}\n*Telefone:* ${data.customerPhone}\n*Tipo:* ${typeLabel}\n${addressBlock}${data.observation ? `*Observações:* ${data.observation}` : ""}\n\n*Itens do pedido:*\n${itemLines}\n\n*Subtotal:* R$ ${data.subtotal.toFixed(2)}\n${couponLine}${discountLine}*Total:* R$ ${data.total.toFixed(2)}\n\n_Pedido enviado via PedeFácil_`;
+  const paymentLabels: Record<NonNullable<WhatsAppOrderData["paymentMethod"]>, string> = {
+    pix: "PIX",
+    credit_card: "Cartão de crédito",
+    debit_card: "Cartão de débito",
+    cash: "Dinheiro",
+  };
+  const paymentLine = data.paymentMethod ? `*Pagamento:* ${paymentLabels[data.paymentMethod]}\n` : "";
+
+  const message = `*Novo pedido - ${data.storeName}*\n\n*Cliente:* ${data.customerName}\n*Telefone:* ${data.customerPhone}\n*Tipo:* ${typeLabel}\n${addressBlock}${paymentLine}${data.observation ? `*Observações:* ${data.observation}` : ""}\n\n*Itens do pedido:*\n${itemLines}\n\n*Subtotal:* R$ ${data.subtotal.toFixed(2)}\n${couponLine}${discountLine}${deliveryLine}${serviceLine}*Total:* R$ ${data.total.toFixed(2)}\n\n_Pedido enviado via PedeFácil_`;
 
   return message;
 }

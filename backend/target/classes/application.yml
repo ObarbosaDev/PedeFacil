@@ -1,0 +1,20 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: pedefacil-whatsapp-receiver
+
+automation:
+  receiver-token: ${PEDEFACIL_RECEIVER_TOKEN:}
+  signature-secret: ${PEDEFACIL_SIGNATURE_SECRET:}
+  outbound-mode: ${OUTBOUND_MODE:log}
+  outbound-url: ${AUTOMATION_OUTBOUND_URL:}
+  outbound-bearer-token: ${AUTOMATION_OUTBOUND_BEARER_TOKEN:}
+  evolution-base-url: ${AUTOMATION_EVOLUTION_BASE_URL:}
+  evolution-api-key: ${AUTOMATION_EVOLUTION_API_KEY:}
+  evolution-instance: ${AUTOMATION_EVOLUTION_INSTANCE:}
+  zapi-base-url: ${AUTOMATION_ZAPI_BASE_URL:https://api.z-api.io}
+  zapi-instance: ${AUTOMATION_ZAPI_INSTANCE:}
+  zapi-token: ${AUTOMATION_ZAPI_TOKEN:}
+

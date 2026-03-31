@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, TicketPercent } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { logAuditEvent } from "@/lib/observability";
 import { toast } from "sonner";
 
 type DiscountType = "percentage" | "fixed";
@@ -165,11 +166,41 @@ export default function Coupons() {
       if (editing) {
         const { error } = await supabase.from("coupons").update(payload).eq("id", editing.id);
         if (error) throw error;
+
+        await logAuditEvent({
+          actorUserId: user?.id ?? null,
+          actorRole: "store_owner",
+          entityType: "coupon",
+          entityId: editing.id,
+          action: "coupon_updated",
+          metadata: {
+            establishmentId: establishment?.id ?? null,
+            code: normalizedCode,
+            discountType: payload.discount_type,
+            discountValue: payload.discount_value,
+            isActive: payload.is_active,
+          },
+        });
         return;
       }
 
-      const { error } = await supabase.from("coupons").insert(payload);
+      const { data: insertedCoupon, error } = await supabase.from("coupons").insert(payload).select("id").single();
       if (error) throw error;
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "coupon",
+        entityId: insertedCoupon?.id,
+        action: "coupon_created",
+        metadata: {
+          establishmentId: establishment?.id ?? null,
+          code: normalizedCode,
+          discountType: payload.discount_type,
+          discountValue: payload.discount_value,
+          isActive: payload.is_active,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["coupons"] });
@@ -184,8 +215,21 @@ export default function Coupons() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const coupon = coupons.find((item) => item.id === id);
       const { error } = await supabase.from("coupons").delete().eq("id", id);
       if (error) throw error;
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "store_owner",
+        entityType: "coupon",
+        entityId: id,
+        action: "coupon_deleted",
+        metadata: {
+          establishmentId: establishment?.id ?? null,
+          code: coupon?.code ?? null,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["coupons"] });
