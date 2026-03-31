@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-import { ArrowRight, BadgeCheck, Rocket, Store, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Rocket, Store, Users } from "lucide-react";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
 
 const registerSchema = z
@@ -91,6 +91,12 @@ export default function Register() {
         <section className="flex items-center justify-center p-6 sm:p-8">
           <Card className="w-full max-w-md border-primary/20 shadow-xl">
             <CardContent className="p-6 sm:p-8">
+              <div className="mb-4">
+                <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-4 w-4" />
+                  Voltar para início
+                </Link>
+              </div>
               <div className="lg:hidden mb-6">
                 <Link to="/" className="inline-flex items-center gap-1">
                   <span className="text-2xl font-black text-primary">Pede</span>

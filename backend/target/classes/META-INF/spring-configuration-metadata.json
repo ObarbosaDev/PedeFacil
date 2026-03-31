@@ -1,0 +1,68 @@
+{
+  "groups": [
+    {
+      "name": "automation",
+      "type": "com.pedefacil.automation.AutomationProperties",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "automation.evolution-api-key",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.evolution-base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.evolution-instance",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.outbound-bearer-token",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.outbound-mode",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties",
+      "defaultValue": "log"
+    },
+    {
+      "name": "automation.outbound-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.receiver-token",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.signature-secret",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.zapi-base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.zapi-instance",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "automation.zapi-token",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.AutomationProperties"
+    }
+  ],
+  "hints": []
+}

@@ -22,9 +22,17 @@ const StoreSettings = lazy(() => import("./pages/admin/StoreSettings"));
 const Loyalty = lazy(() => import("./pages/admin/Loyalty"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Automations = lazy(() => import("./pages/admin/Automations"));
+const Drivers = lazy(() => import("./pages/admin/Drivers"));
 const PublicMenu = lazy(() => import("./pages/public/PublicMenu"));
 const Checkout = lazy(() => import("./pages/public/Checkout"));
+const DeliveryTracking = lazy(() => import("./pages/public/DeliveryTracking"));
 const ClientPanel = lazy(() => import("./pages/client/ClientPanel"));
+const ClientLogin = lazy(() => import("./pages/client/ClientLogin"));
+const ClientRegister = lazy(() => import("./pages/client/ClientRegister"));
+const ClientAccount = lazy(() => import("./pages/client/ClientAccount"));
+const DriverLogin = lazy(() => import("./pages/driver/DriverLogin"));
+const DriverRegister = lazy(() => import("./pages/driver/DriverRegister"));
+const DriverPanel = lazy(() => import("./pages/driver/DriverPanel"));
 
 const queryClient = new QueryClient();
 
@@ -62,8 +70,15 @@ const App = () => (
 
                 {/* Public store */}
                 <Route path="/cliente" element={<ClientPanel />} />
+                <Route path="/cliente/login" element={<ClientLogin />} />
+                <Route path="/cliente/registro" element={<ClientRegister />} />
+                <Route path="/cliente/conta" element={<ClientAccount />} />
+                <Route path="/entregador/login" element={<DriverLogin />} />
+                <Route path="/entregador/registro" element={<DriverRegister />} />
+                <Route path="/entregador" element={<DriverPanel />} />
                 <Route path="/loja/:slug" element={<PublicMenu />} />
                 <Route path="/loja/:slug/checkout" element={<Checkout />} />
+                <Route path="/acompanhar/:token" element={<DeliveryTracking />} />
 
                 {/* Admin */}
                 <Route path="/admin" element={<AdminLayout />}>
@@ -75,6 +90,7 @@ const App = () => (
                   <Route path="fidelidade" element={<Loyalty />} />
                   <Route path="cupons" element={<Coupons />} />
                   <Route path="automacoes" element={<Automations />} />
+                  <Route path="entregadores" element={<Drivers />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

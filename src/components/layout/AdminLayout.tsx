@@ -12,6 +12,7 @@ import {
   X,
   TicketPercent,
   Bot,
+  Bike,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const navItems = [
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos" },
   { label: "Seções", icon: FolderOpen, path: "/admin/categorias" },
   { label: "Cupons", icon: TicketPercent, path: "/admin/cupons" },
+  { label: "Entregadores", icon: Bike, path: "/admin/entregadores" },
   { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja" },
   { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade" },
@@ -56,13 +58,18 @@ export default function AdminLayout() {
           <span className="text-xl font-extrabold text-primary">Pede</span>
           <span className="text-xl font-extrabold">Fácil</span>
         </Link>
-        <button onClick={() => setMobileOpen(!mobileOpen)}>
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="admin-mobile-menu"
+        >
           {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-background pt-16">
+        <div id="admin-mobile-menu" className="md:hidden fixed inset-0 z-40 bg-background pt-16">
           <nav className="p-4 space-y-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;

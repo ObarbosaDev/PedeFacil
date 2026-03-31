@@ -1,12 +1,22 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getResetBlockSeconds,
+  getSignInBlockSeconds,
+  registerResetFailure,
+  registerResetSuccess,
+  registerSignInFailure,
+  registerSignInSuccess,
+} from "@/lib/auth-security";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signUpClient: (email: string, password: string, fullName: string, phone?: string) => Promise<void>;
+  signUpDeliveryDriver: (email: string, password: string, fullName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -43,23 +53,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: normalizeEmail(email),
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, user_type: "store_owner" },
         emailRedirectTo: `${window.location.origin}/login`,
       },
     });
     if (error) throw error;
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
+  const signUpClient = async (email: string, password: string, fullName: string, phone?: string) => {
+    const { error } = await supabase.auth.signUp({
+      email: normalizeEmail(email),
+      password,
+      options: {
+        data: { full_name: fullName, user_type: "customer", phone: phone || null },
+        emailRedirectTo: `${window.location.origin}/cliente/login`,
+      },
+    });
     if (error) throw error;
   };
 
+  const signUpDeliveryDriver = async (email: string, password: string, fullName: string) => {
+    const { error } = await supabase.auth.signUp({
+      email: normalizeEmail(email),
+      password,
+      options: {
+        data: { full_name: fullName, user_type: "delivery_driver" },
+        emailRedirectTo: `${window.location.origin}/entregador/login`,
+      },
+    });
+    if (error) throw error;
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const blockedSeconds = getSignInBlockSeconds();
+    if (blockedSeconds > 0) {
+      throw new Error(`Muitas tentativas. Aguarde ${blockedSeconds}s para tentar novamente.`);
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
+    if (error) {
+      registerSignInFailure();
+      throw error;
+    }
+    registerSignInSuccess();
+  };
+
   const resetPassword = async (email: string) => {
+    const blockedSeconds = getResetBlockSeconds();
+    if (blockedSeconds > 0) {
+      throw new Error(`Aguarde ${blockedSeconds}s para solicitar outro link.`);
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
       redirectTo: `${window.location.origin}/redefinir-senha`,
     });
-    if (error) throw error;
+    if (error) {
+      registerResetFailure();
+      throw error;
+    }
+    registerResetSuccess();
   };
 
   const updatePassword = async (password: string) => {
@@ -73,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, resetPassword, updatePassword, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signUpClient, signUpDeliveryDriver, signIn, resetPassword, updatePassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );

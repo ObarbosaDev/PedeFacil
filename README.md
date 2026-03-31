@@ -326,13 +326,13 @@ src/
 `-- test/
 ```
 
-## 13. Deploy (Lovable + GitHub)
+## 13. Deploy (GitHub + Hosting)
 
 Fluxo recomendado:
 
 1. Commit e push para `main`.
-2. No projeto Lovable, execute Sync/Pull do GitHub.
-3. Publique (Publish/Deploy) se nao estiver automatico.
+2. No seu provedor de deploy, conecte o repositorio GitHub.
+3. Execute o build e publique.
 
 Comandos:
 

@@ -1,15 +1,16 @@
-﻿import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/hooks/useCart";
 import ProductCard from "@/components/store/ProductCard";
 import CartDrawer from "@/components/store/CartDrawer";
-import { ShoppingCart, MapPin, Clock, Phone, Search, Sparkles, Flame, Star } from "lucide-react";
+import { ShoppingCart, MapPin, Clock, Phone, Search, Sparkles, Flame, Star, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatPhone } from "@/lib/formatters";
+import { trackCheckoutEvent } from "@/lib/analytics";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function PublicMenu() {
@@ -30,6 +31,24 @@ export default function PublicMenu() {
       return data;
     },
   });
+
+  useEffect(() => {
+    if (!establishment?.id) return;
+    void trackCheckoutEvent({
+      establishmentId: establishment.id,
+      eventName: "menu_view",
+      metadata: { slug: establishment.slug },
+    });
+  }, [establishment?.id, establishment?.slug]);
+
+  const handleAddItem = (item: { id: string; name: string; price: number; image_url?: string | null }) => {
+    addItem(item);
+    void trackCheckoutEvent({
+      establishmentId: establishment?.id,
+      eventName: "add_to_cart",
+      metadata: { productId: item.id, productName: item.name, price: item.price },
+    });
+  };
 
   const { data: categories = [] } = useQuery({
     queryKey: ["public-categories", establishment?.id],
@@ -100,6 +119,12 @@ export default function PublicMenu() {
 
       <header className="border-b bg-card/90 backdrop-blur sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-5 space-y-4">
+          <div>
+            <Link to="/cliente" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar para lojas
+            </Link>
+          </div>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-start gap-4">
               {establishment.logo_url ? (
@@ -236,7 +261,7 @@ export default function PublicMenu() {
                     price={Number(product.price)}
                     image_url={product.image_url}
                     is_available={product.is_available}
-                    onAdd={addItem}
+                    onAdd={handleAddItem}
                   />
                 ))}
               </div>
@@ -261,7 +286,7 @@ export default function PublicMenu() {
                   price={Number(product.price)}
                   image_url={product.image_url}
                   is_available={product.is_available}
-                  onAdd={addItem}
+                  onAdd={handleAddItem}
                 />
               ))}
             </div>

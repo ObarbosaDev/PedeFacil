@@ -2,8 +2,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -14,16 +15,20 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/formatters";
+import { trackCheckoutEvent } from "@/lib/analytics";
 import { generateWhatsAppMessage, openWhatsApp } from "@/lib/whatsapp";
+import { createTraceId, logAuditEvent, withTrace } from "@/lib/observability";
 import { toast } from "sonner";
-import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent } from "lucide-react";
+import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent, ClipboardCheck } from "lucide-react";
 
 const checkoutSchema = z
   .object({
     customerName: z.string().min(2, "Digite pelo menos 2 caracteres."),
     customerPhone: z.string().min(10, "Informe um telefone válido."),
     orderType: z.enum(["pickup", "delivery"]),
+    paymentMethod: z.enum(["pix", "credit_card", "debit_card", "cash"]),
     observation: z.string().max(500).optional(),
     deliveryStreet: z.string().optional(),
     deliveryNumber: z.string().optional(),
@@ -92,11 +97,21 @@ function calculateDiscount(subtotal: number, coupon: {
 }
 
 export default function Checkout() {
+  const { user } = useAuth();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { items, total, clearCart } = useCart();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryFeeMessage, setDeliveryFeeMessage] = useState<string>("");
+  const serviceFee = 0;
+  const draftStorageKey = `pedefacil.checkout.draft.${slug || "default"}`;
+  const checkoutPath = `/loja/${slug}/checkout`;
+  const loginHref = `/cliente/login?next=${encodeURIComponent(checkoutPath)}`;
+  const registerHref = `/cliente/registro?next=${encodeURIComponent(checkoutPath)}&from=checkout`;
+  const userType = String((user?.user_metadata as any)?.user_type || "");
+  const isCustomerUser = !!user && (!userType || userType === "customer");
 
   const { data: establishment } = useQuery({
     queryKey: ["public-establishment", slug],
@@ -117,6 +132,7 @@ export default function Checkout() {
       customerName: "",
       customerPhone: "",
       orderType: "pickup",
+      paymentMethod: "pix",
       observation: "",
       deliveryStreet: "",
       deliveryNumber: "",
@@ -129,7 +145,119 @@ export default function Checkout() {
     },
   });
 
+  const watchedValues = useWatch({ control: form.control });
   const orderType = form.watch("orderType");
+
+  useEffect(() => {
+    if (!slug) return;
+
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        form: CheckoutForm;
+        couponCode: string;
+        appliedCoupon: AppliedCoupon | null;
+      };
+
+      if (parsed?.form) {
+        form.reset({
+          ...form.getValues(),
+          ...parsed.form,
+        });
+      }
+
+      if (parsed?.couponCode) setCouponCode(parsed.couponCode);
+      if (parsed?.appliedCoupon) setAppliedCoupon(parsed.appliedCoupon);
+    } catch {
+      // ignora rascunho inválido
+    }
+  }, [draftStorageKey, form, slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    if (!items.length) return;
+
+    localStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        form: watchedValues,
+        couponCode,
+        appliedCoupon,
+      })
+    );
+  }, [appliedCoupon, couponCode, draftStorageKey, items.length, slug, watchedValues]);
+
+  const { data: customerProfile } = useQuery({
+    queryKey: ["checkout-customer-profile", user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("customer_profiles")
+        .select("*")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: customerDefaultAddress } = useQuery({
+    queryKey: ["checkout-customer-default-address", user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("customer_addresses")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("is_default", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  useEffect(() => {
+    if (!customerProfile) return;
+    if (!form.getValues("customerName")) form.setValue("customerName", customerProfile.full_name || "");
+    if (!form.getValues("customerPhone")) form.setValue("customerPhone", customerProfile.phone || "");
+  }, [customerProfile, form]);
+
+  useEffect(() => {
+    if (!customerDefaultAddress) return;
+    if (!form.getValues("deliveryStreet")) form.setValue("deliveryStreet", customerDefaultAddress.street || "");
+    if (!form.getValues("deliveryNumber")) form.setValue("deliveryNumber", customerDefaultAddress.number || "");
+    if (!form.getValues("deliveryNeighborhood")) form.setValue("deliveryNeighborhood", customerDefaultAddress.neighborhood || "");
+    if (!form.getValues("deliveryCity")) form.setValue("deliveryCity", customerDefaultAddress.city || "");
+    if (!form.getValues("deliveryState")) form.setValue("deliveryState", customerDefaultAddress.state || "");
+    if (!form.getValues("deliveryZipCode")) form.setValue("deliveryZipCode", customerDefaultAddress.zip_code || "");
+    if (!form.getValues("deliveryComplement")) form.setValue("deliveryComplement", customerDefaultAddress.complement || "");
+    if (!form.getValues("deliveryReference")) form.setValue("deliveryReference", customerDefaultAddress.reference || "");
+  }, [customerDefaultAddress, form]);
+
+  const { data: deliveryZones = [] } = useQuery({
+    queryKey: ["checkout-delivery-zones", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("establishment_delivery_zones")
+        .select("*")
+        .eq("establishment_id", establishment!.id)
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  useEffect(() => {
+    if (!establishment?.id) return;
+    void trackCheckoutEvent({
+      establishmentId: establishment.id,
+      userId: user?.id ?? null,
+      eventName: "checkout_view",
+      metadata: { slug: establishment.slug, itemsInCart: items.length },
+    });
+  }, [establishment?.id, establishment?.slug, items.length, user?.id]);
 
   const deliverySummary = useMemo(() => {
     if (orderType !== "delivery") return null;
@@ -159,12 +287,66 @@ export default function Checkout() {
     setAppliedCoupon((prev) => (prev ? { ...prev, discountAmount: updatedDiscount } : prev));
   }, [total, appliedCoupon]);
 
+  useEffect(() => {
+    if (orderType !== "delivery") {
+      setDeliveryFee(0);
+      setDeliveryFeeMessage("");
+      return;
+    }
+
+    const zip = String(form.getValues("deliveryZipCode") || "").replace(/\D/g, "");
+    if (zip.length < 5) {
+      setDeliveryFee(0);
+      setDeliveryFeeMessage("Informe o CEP para calcular a taxa de entrega.");
+      return;
+    }
+
+    const zone = (deliveryZones as any[])
+      .filter((candidate) => zip.startsWith(String(candidate.zip_prefix || "").replace(/\D/g, "")))
+      .sort((a, b) => String(b.zip_prefix).length - String(a.zip_prefix).length)[0];
+
+    if (!zone) {
+      setDeliveryFee(0);
+      setDeliveryFeeMessage("Ainda não entregamos nessa região.");
+      return;
+    }
+
+    const minOrderValue = Number(zone.min_order_value || 0);
+    if (total < minOrderValue) {
+      setDeliveryFee(Number(zone.fee || 0));
+      setDeliveryFeeMessage(`Pedido mínimo para ${zone.name}: ${formatCurrency(minOrderValue)}.`);
+      return;
+    }
+
+    const freeOverValue = zone.free_over_value != null ? Number(zone.free_over_value) : null;
+    if (freeOverValue != null && total >= freeOverValue) {
+      setDeliveryFee(0);
+      setDeliveryFeeMessage(`Frete grátis para ${zone.name} em pedidos acima de ${formatCurrency(freeOverValue)}.`);
+      return;
+    }
+
+    setDeliveryFee(Number(zone.fee || 0));
+    setDeliveryFeeMessage(`Taxa de entrega para ${zone.name}.`);
+  }, [deliveryZones, form, orderType, total]);
+
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
-  const finalTotal = Math.max(Number((total - discountAmount).toFixed(2)), 0);
+  const finalTotal = Math.max(Number((total - discountAmount + deliveryFee + serviceFee).toFixed(2)), 0);
+  const values = form.watch();
+  const requiredBaseFields = ["customerName", "customerPhone"] as const;
+  const requiredDeliveryFields = ["deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryCity", "deliveryState", "deliveryZipCode"] as const;
+  const totalRequiredFields = requiredBaseFields.length + (orderType === "delivery" ? requiredDeliveryFields.length : 0);
+  const filledBaseFields = requiredBaseFields.filter((field) => String(values[field] || "").trim()).length;
+  const filledDeliveryFields = orderType === "delivery"
+    ? requiredDeliveryFields.filter((field) => String(values[field] || "").trim()).length
+    : 0;
+  const formCompletion = totalRequiredFields > 0
+    ? Math.round(((filledBaseFields + filledDeliveryFields) / totalRequiredFields) * 100)
+    : 0;
 
   const applyCouponMutation = useMutation({
     mutationFn: async () => {
       if (!establishment) throw new Error("Loja não encontrada.");
+      const traceId = createTraceId();
 
       const normalizedCode = couponCode.trim().toUpperCase();
       if (!normalizedCode) throw new Error("Digite um código de cupom.");
@@ -211,6 +393,23 @@ export default function Checkout() {
         discountAmount: computedDiscount,
       };
 
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "customer",
+        entityType: "coupon",
+        entityId: coupon.id,
+        action: "coupon_applied_checkout",
+        metadata: withTrace(
+          {
+            establishmentId: establishment.id,
+            couponCode: coupon.code,
+            discountAmount: computedDiscount,
+            subtotal: total,
+          },
+          traceId
+        ),
+      });
+
       return parsed;
     },
     onSuccess: (coupon) => {
@@ -229,6 +428,18 @@ export default function Checkout() {
 
   const orderMutation = useMutation({
     mutationFn: async (data: CheckoutForm) => {
+      const traceId = createTraceId();
+      if (!user) throw new Error("Faça login para finalizar o pedido.");
+
+      await (supabase as any).from("customer_profiles").upsert(
+        {
+          user_id: user.id,
+          full_name: data.customerName,
+          phone: data.customerPhone,
+        },
+        { onConflict: "user_id" }
+      );
+
       const { data: customer, error: custErr } = await supabase
         .from("customers")
         .insert({ name: data.customerName, phone: data.customerPhone })
@@ -238,29 +449,60 @@ export default function Checkout() {
 
       const isDelivery = data.orderType === "delivery";
 
+      if (isDelivery && deliveryFeeMessage === "Ainda não entregamos nessa região.") {
+        throw new Error("A loja ainda não entrega nessa região.");
+      }
+
+      if (isDelivery) {
+        await (supabase as any)
+          .from("customer_addresses")
+          .update({ is_default: false })
+          .eq("user_id", user.id);
+
+        await (supabase as any).from("customer_addresses").insert({
+          user_id: user.id,
+          label: "Último usado",
+          street: data.deliveryStreet,
+          number: data.deliveryNumber,
+          neighborhood: data.deliveryNeighborhood,
+          city: data.deliveryCity,
+          state: data.deliveryState,
+          zip_code: data.deliveryZipCode,
+          complement: data.deliveryComplement || null,
+          reference: data.deliveryReference || null,
+          is_default: true,
+        });
+      }
+
+      const orderPayload: any = {
+        establishment_id: establishment!.id,
+        customer_id: customer.id,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        order_type: data.orderType,
+        observation: data.observation || null,
+        payment_method: data.paymentMethod,
+        payment_status: "pending",
+        subtotal: total,
+        discount_amount: discountAmount,
+        delivery_fee: isDelivery ? deliveryFee : 0,
+        service_fee: serviceFee,
+        coupon_id: appliedCoupon?.id || null,
+        coupon_code: appliedCoupon?.code || null,
+        total: finalTotal,
+        delivery_street: isDelivery ? data.deliveryStreet || null : null,
+        delivery_number: isDelivery ? data.deliveryNumber || null : null,
+        delivery_neighborhood: isDelivery ? data.deliveryNeighborhood || null : null,
+        delivery_city: isDelivery ? data.deliveryCity || null : null,
+        delivery_state: isDelivery ? data.deliveryState || null : null,
+        delivery_zip_code: isDelivery ? data.deliveryZipCode || null : null,
+        delivery_complement: isDelivery ? data.deliveryComplement || null : null,
+        delivery_reference: isDelivery ? data.deliveryReference || null : null,
+      };
+
       const { data: order, error: orderErr } = await supabase
         .from("orders")
-        .insert({
-          establishment_id: establishment!.id,
-          customer_id: customer.id,
-          customer_name: data.customerName,
-          customer_phone: data.customerPhone,
-          order_type: data.orderType,
-          observation: data.observation || null,
-          subtotal: total,
-          discount_amount: discountAmount,
-          coupon_id: appliedCoupon?.id || null,
-          coupon_code: appliedCoupon?.code || null,
-          total: finalTotal,
-          delivery_street: isDelivery ? data.deliveryStreet || null : null,
-          delivery_number: isDelivery ? data.deliveryNumber || null : null,
-          delivery_neighborhood: isDelivery ? data.deliveryNeighborhood || null : null,
-          delivery_city: isDelivery ? data.deliveryCity || null : null,
-          delivery_state: isDelivery ? data.deliveryState || null : null,
-          delivery_zip_code: isDelivery ? data.deliveryZipCode || null : null,
-          delivery_complement: isDelivery ? data.deliveryComplement || null : null,
-          delivery_reference: isDelivery ? data.deliveryReference || null : null,
-        })
+        .insert(orderPayload)
         .select()
         .single();
       if (orderErr) throw orderErr;
@@ -275,6 +517,26 @@ export default function Checkout() {
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
 
+      const { error: linkErr } = await (supabase as any).from("customer_order_links").upsert(
+        {
+          user_id: user.id,
+          order_id: order.id,
+          establishment_id: establishment!.id,
+          metadata: withTrace(
+            {
+              orderType: data.orderType,
+              couponCode: appliedCoupon?.code || null,
+              subtotal: total,
+              discountAmount,
+              total: finalTotal,
+            },
+            traceId
+          ),
+        },
+        { onConflict: "user_id,order_id" }
+      );
+      if (linkErr) throw linkErr;
+
       await supabase.from("loyalty_accounts").upsert(
         {
           customer_id: customer.id,
@@ -283,6 +545,41 @@ export default function Checkout() {
         },
         { onConflict: "customer_id,establishment_id" }
       );
+
+      await logAuditEvent({
+        actorUserId: user?.id ?? null,
+        actorRole: "customer",
+        entityType: "order",
+        entityId: order.id,
+        action: "order_created_checkout",
+        metadata: withTrace(
+          {
+            establishmentId: establishment!.id,
+            orderType: data.orderType,
+            paymentMethod: data.paymentMethod,
+            couponCode: appliedCoupon?.code || null,
+            itemCount: items.length,
+            subtotal: total,
+            discountAmount,
+            deliveryFee: isDelivery ? deliveryFee : 0,
+            serviceFee,
+            total: finalTotal,
+          },
+          traceId
+        ),
+      });
+
+      await trackCheckoutEvent({
+        establishmentId: establishment!.id,
+        userId: user.id,
+        eventName: "order_submitted",
+        metadata: {
+          orderId: order.id,
+          orderType: data.orderType,
+          paymentMethod: data.paymentMethod,
+          total: finalTotal,
+        },
+      });
 
       return { order, data };
     },
@@ -310,17 +607,70 @@ export default function Checkout() {
         items,
         subtotal: total,
         discountAmount,
+        deliveryFee: result.data.orderType === "delivery" ? deliveryFee : 0,
+        serviceFee,
+        paymentMethod: result.data.paymentMethod,
         couponCode: appliedCoupon?.code,
         total: finalTotal,
       });
 
       openWhatsApp(establishment!.whatsapp, message);
       clearCart();
+      localStorage.removeItem(draftStorageKey);
       toast.success("Pedido enviado com sucesso.");
       navigate(`/loja/${slug}`);
     },
     onError: (err: any) => toast.error(err.message || "Não foi possível enviar o pedido."),
   });
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Entre na sua conta para concluir o pedido</CardTitle>
+            <CardDescription>
+              Para segurança do comércio e rastreio do pedido, só finalizamos compras com conta de cliente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full" onClick={() => navigate(loginHref)}>
+              Entrar na conta
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => navigate(registerHref)}>
+              Criar conta de cliente
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => navigate(`/loja/${slug}`)}>
+              Voltar ao cardápio
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isCustomerUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Use uma conta de cliente para comprar</CardTitle>
+            <CardDescription>
+              Essa sessão está vinculada a outro tipo de perfil. Faça login com conta de cliente para continuar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full" onClick={() => navigate("/cliente/login")}>
+              Entrar com conta de cliente
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => navigate(`/loja/${slug}`)}>
+              Voltar ao cardápio
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -342,7 +692,9 @@ export default function Checkout() {
           <Button variant="ghost" onClick={() => navigate(`/loja/${slug}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />Voltar ao cardápio
           </Button>
-          <Badge variant="secondary">Finalização segura</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">Finalização segura</Badge>
+          </div>
         </div>
 
         <section className="rounded-2xl border bg-card p-6 md:p-8">
@@ -368,6 +720,25 @@ export default function Checkout() {
               <p className="text-xl font-bold">Rápida</p>
             </div>
           </div>
+
+          <div className="rounded-xl border bg-muted/30 p-4 mt-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                Progresso da finalização
+              </p>
+              <p className="text-sm font-bold">{formCompletion}%</p>
+            </div>
+            <Progress value={formCompletion} />
+            <p className="text-xs text-muted-foreground">
+              Preencha os campos principais para agilizar o envio sem retrabalho.
+            </p>
+          </div>
+          <p className="sr-only" aria-live="polite">
+            {orderType === "delivery" && deliveryFeeMessage
+              ? `Status da entrega: ${deliveryFeeMessage}`
+              : "Finalização pronta para envio."}
+          </p>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -423,6 +794,14 @@ export default function Checkout() {
                   <span className="text-muted-foreground">Desconto</span>
                   <span className={discountAmount > 0 ? "text-emerald-600" : ""}>- {formatCurrency(discountAmount)}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxa de entrega</span>
+                  <span>{formatCurrency(orderType === "delivery" ? deliveryFee : 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxa de serviço</span>
+                  <span>{formatCurrency(serviceFee)}</span>
+                </div>
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
                   <span>Total</span>
                   <span className="text-primary">{formatCurrency(finalTotal)}</span>
@@ -430,11 +809,26 @@ export default function Checkout() {
               </div>
 
               {deliverySummary && (
-                <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
                   <p className="font-medium mb-1">Endereço de entrega</p>
                   <p className="text-muted-foreground">{deliverySummary.line1}</p>
                   <p className="text-muted-foreground">{deliverySummary.line2}</p>
                   <p className="text-muted-foreground">CEP: {deliverySummary.zipCode}</p>
+                  {deliveryFeeMessage && <p className="text-xs text-muted-foreground">{deliveryFeeMessage}</p>}
+                </div>
+              )}
+
+              {orderType === "delivery" && deliveryFeeMessage && (
+                <div
+                  className={`rounded-md border p-2 text-xs ${
+                    deliveryFeeMessage === "Ainda não entregamos nessa região."
+                      ? "border-destructive/40 bg-destructive/5 text-destructive"
+                      : "border-primary/30 bg-primary/5 text-foreground"
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {deliveryFeeMessage}
                 </div>
               )}
 
@@ -481,6 +875,33 @@ export default function Checkout() {
                           <Label htmlFor="delivery" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
                             <RadioGroupItem value="delivery" id="delivery" />
                             Entrega
+                          </Label>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="paymentMethod" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma de pagamento</FormLabel>
+                      <FormControl>
+                        <RadioGroup value={field.value} onValueChange={field.onChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Label htmlFor="pix" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="pix" id="pix" />
+                            PIX
+                          </Label>
+                          <Label htmlFor="credit_card" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="credit_card" id="credit_card" />
+                            Cartão de crédito
+                          </Label>
+                          <Label htmlFor="debit_card" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="debit_card" id="debit_card" />
+                            Cartão de débito
+                          </Label>
+                          <Label htmlFor="cash" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="cash" id="cash" />
+                            Dinheiro
                           </Label>
                         </RadioGroup>
                       </FormControl>
@@ -573,9 +994,18 @@ export default function Checkout() {
                     </FormItem>
                   )} />
 
-                  <Button type="submit" className="w-full h-12 text-base" disabled={orderMutation.isPending}>
+                  <Button
+                    type="submit"
+                    className="w-full h-12 text-base"
+                    disabled={orderMutation.isPending || (orderType === "delivery" && deliveryFeeMessage === "Ainda não entregamos nessa região.")}
+                  >
                     {orderMutation.isPending ? "Enviando pedido..." : "Enviar pedido no WhatsApp"}
                   </Button>
+                  {orderType === "delivery" && deliveryFeeMessage === "Ainda não entregamos nessa região." && (
+                    <p className="text-xs text-destructive" role="status">
+                      Esse CEP está fora da área de entrega desta loja.
+                    </p>
+                  )}
                 </form>
               </Form>
             </CardContent>

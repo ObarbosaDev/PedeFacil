@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { slugify } from "@/lib/formatters";
 import { toast } from "sonner";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import { validateImageFile } from "@/lib/security";
 
 export default function StoreSettings() {
@@ -26,6 +26,34 @@ export default function StoreSettings() {
     enabled: !!user,
   });
 
+  const { data: deliveryZones = [] } = useQuery({
+    queryKey: ["store-delivery-zones", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("establishment_delivery_zones")
+        .select("*")
+        .eq("establishment_id", establishment!.id)
+        .order("zip_prefix", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: slaSettings } = useQuery({
+    queryKey: ["store-sla-settings", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("establishment_sla_settings")
+        .select("*")
+        .eq("establishment_id", establishment!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!establishment,
+  });
+
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -33,6 +61,20 @@ export default function StoreSettings() {
     address: "",
     opening_hours: "",
     logo_url: "",
+  });
+
+  const [zoneForm, setZoneForm] = useState({
+    name: "",
+    zipPrefix: "",
+    fee: "",
+    minOrderValue: "0",
+    freeOverValue: "",
+  });
+  const [slaForm, setSlaForm] = useState({
+    receivedMinutes: "5",
+    confirmedMinutes: "10",
+    inPreparationMinutes: "25",
+    readyMinutes: "10",
   });
 
   const [initialized, setInitialized] = useState(false);
@@ -47,6 +89,16 @@ export default function StoreSettings() {
     });
     setInitialized(true);
   }
+
+  useEffect(() => {
+    if (!slaSettings) return;
+    setSlaForm({
+      receivedMinutes: String(slaSettings.received_minutes || 5),
+      confirmedMinutes: String(slaSettings.confirmed_minutes || 10),
+      inPreparationMinutes: String(slaSettings.in_preparation_minutes || 25),
+      readyMinutes: String(slaSettings.ready_minutes || 10),
+    });
+  }, [slaSettings]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -69,6 +121,81 @@ export default function StoreSettings() {
       toast.success("Loja salva com sucesso.");
     },
     onError: (err: any) => toast.error(err.message),
+  });
+
+  const saveZoneMutation = useMutation({
+    mutationFn: async () => {
+      if (!establishment) throw new Error("Crie sua loja primeiro.");
+
+      const zipPrefix = zoneForm.zipPrefix.replace(/\D/g, "");
+      const fee = Number(zoneForm.fee);
+      const minOrderValue = Number(zoneForm.minOrderValue || 0);
+      const freeOverValue = zoneForm.freeOverValue ? Number(zoneForm.freeOverValue) : null;
+
+      if (!zoneForm.name.trim()) throw new Error("Informe um nome para a zona.");
+      if (zipPrefix.length < 3) throw new Error("Informe pelo menos 3 dígitos do CEP.");
+      if (!Number.isFinite(fee) || fee < 0) throw new Error("Taxa de entrega inválida.");
+      if (!Number.isFinite(minOrderValue) || minOrderValue < 0) throw new Error("Pedido mínimo inválido.");
+      if (freeOverValue != null && (!Number.isFinite(freeOverValue) || freeOverValue < 0)) {
+        throw new Error("Valor de frete grátis inválido.");
+      }
+
+      const { error } = await (supabase as any).from("establishment_delivery_zones").insert({
+        establishment_id: establishment.id,
+        name: zoneForm.name.trim(),
+        zip_prefix: zipPrefix,
+        fee,
+        min_order_value: minOrderValue,
+        free_over_value: freeOverValue,
+        is_active: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setZoneForm({ name: "", zipPrefix: "", fee: "", minOrderValue: "0", freeOverValue: "" });
+      queryClient.invalidateQueries({ queryKey: ["store-delivery-zones"] });
+      toast.success("Zona de entrega salva.");
+    },
+    onError: (err: any) => toast.error(err.message || "Não foi possível salvar a zona."),
+  });
+
+  const deleteZoneMutation = useMutation({
+    mutationFn: async (zoneId: string) => {
+      const { error } = await (supabase as any).from("establishment_delivery_zones").delete().eq("id", zoneId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-delivery-zones"] });
+      toast.success("Zona removida.");
+    },
+    onError: (err: any) => toast.error(err.message || "Não foi possível remover a zona."),
+  });
+
+  const saveSlaMutation = useMutation({
+    mutationFn: async () => {
+      if (!establishment) throw new Error("Crie sua loja primeiro.");
+      const payload = {
+        establishment_id: establishment.id,
+        received_minutes: Number(slaForm.receivedMinutes),
+        confirmed_minutes: Number(slaForm.confirmedMinutes),
+        in_preparation_minutes: Number(slaForm.inPreparationMinutes),
+        ready_minutes: Number(slaForm.readyMinutes),
+      };
+
+      if (Object.values(payload).some((value) => typeof value === "number" && (!Number.isFinite(value) || value <= 0))) {
+        throw new Error("Preencha tempos de SLA válidos (em minutos).");
+      }
+
+      const { error } = await (supabase as any)
+        .from("establishment_sla_settings")
+        .upsert(payload, { onConflict: "establishment_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-sla-settings"] });
+      toast.success("SLA salvo com sucesso.");
+    },
+    onError: (err: any) => toast.error(err.message || "Não foi possível salvar o SLA."),
   });
 
   const handleUploadLogo = async (file?: File) => {
@@ -179,6 +306,97 @@ export default function StoreSettings() {
           </Button>
         </CardContent>
       </Card>
+
+      {establishment && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Zonas de entrega por CEP</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="md:col-span-2">
+                <Label>Nome da zona</Label>
+                <Input value={zoneForm.name} onChange={(e) => setZoneForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Centro, Zona Sul..." />
+              </div>
+              <div>
+                <Label>Prefixo CEP</Label>
+                <Input value={zoneForm.zipPrefix} onChange={(e) => setZoneForm((prev) => ({ ...prev, zipPrefix: e.target.value }))} placeholder="01310" />
+              </div>
+              <div>
+                <Label>Taxa (R$)</Label>
+                <Input value={zoneForm.fee} onChange={(e) => setZoneForm((prev) => ({ ...prev, fee: e.target.value }))} placeholder="7.90" />
+              </div>
+              <div>
+                <Label>Mínimo (R$)</Label>
+                <Input value={zoneForm.minOrderValue} onChange={(e) => setZoneForm((prev) => ({ ...prev, minOrderValue: e.target.value }))} placeholder="0.00" />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Frete grátis acima de (R$)</Label>
+                <Input value={zoneForm.freeOverValue} onChange={(e) => setZoneForm((prev) => ({ ...prev, freeOverValue: e.target.value }))} placeholder="Ex.: 80.00" />
+              </div>
+            </div>
+
+            <Button onClick={() => saveZoneMutation.mutate()} disabled={saveZoneMutation.isPending}>
+              <Plus className="h-4 w-4 mr-2" />
+              {saveZoneMutation.isPending ? "Salvando..." : "Adicionar zona"}
+            </Button>
+
+            <div className="space-y-2">
+              {deliveryZones.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma zona configurada ainda.</p>
+              ) : (
+                (deliveryZones as any[]).map((zone) => (
+                  <div key={zone.id} className="rounded-lg border p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{zone.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        CEP: {zone.zip_prefix} | Taxa: R$ {Number(zone.fee).toFixed(2)} | Mínimo: R$ {Number(zone.min_order_value).toFixed(2)}
+                      </p>
+                      {zone.free_over_value != null && (
+                        <p className="text-sm text-muted-foreground">Frete grátis acima de R$ {Number(zone.free_over_value).toFixed(2)}</p>
+                      )}
+                    </div>
+                    <Button variant="destructive" size="sm" onClick={() => deleteZoneMutation.mutate(zone.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {establishment && (
+        <Card>
+          <CardHeader>
+            <CardTitle>SLA da operação (minutos)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label>Recebido</Label>
+                <Input value={slaForm.receivedMinutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, receivedMinutes: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Confirmado</Label>
+                <Input value={slaForm.confirmedMinutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, confirmedMinutes: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Em preparo</Label>
+                <Input value={slaForm.inPreparationMinutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, inPreparationMinutes: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Pronto</Label>
+                <Input value={slaForm.readyMinutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, readyMinutes: e.target.value }))} />
+              </div>
+            </div>
+            <Button onClick={() => saveSlaMutation.mutate()} disabled={saveSlaMutation.isPending}>
+              {saveSlaMutation.isPending ? "Salvando SLA..." : "Salvar SLA"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

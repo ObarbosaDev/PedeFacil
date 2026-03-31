@@ -76,9 +76,18 @@ export default function LandingPage() {
   });
 
   const demoHref = demoStore ? `/loja/${demoStore.slug}` : "/cliente";
+  const scrollToPlans = () => {
+    document.getElementById("planos")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#conteudo-principal"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md"
+      >
+        Ir para o conteúdo principal
+      </a>
       <div className="fixed inset-0 -z-10 pointer-events-none">
         <div className="absolute -top-24 right-0 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-orange-300/20 blur-3xl" />
@@ -98,14 +107,12 @@ export default function LandingPage() {
             <Link to="/login">
               <Button variant="ghost" className="rounded-full">Entrar</Button>
             </Link>
-            <Link to="#planos">
-              <Button className="rounded-full">Ver planos lojista</Button>
-            </Link>
+            <Button className="rounded-full" onClick={scrollToPlans}>Ver planos lojista</Button>
           </div>
         </div>
       </nav>
 
-      <section className="max-w-6xl mx-auto px-4 pt-16 pb-10">
+      <section id="conteudo-principal" className="max-w-6xl mx-auto px-4 pt-16 pb-10">
         <div className="grid lg:grid-cols-2 gap-10 items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm font-medium mb-5">
@@ -122,11 +129,9 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-wrap gap-3 mt-7">
-              <Link to="#planos">
-                <Button size="lg" className="h-12 px-6 text-base rounded-full">
-                  Ver planos para lojista <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              <Button size="lg" className="h-12 px-6 text-base rounded-full" onClick={scrollToPlans}>
+                Ver planos para lojista <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
               <Link to="/cliente">
                 <Button size="lg" variant="outline" className="h-12 px-6 text-base rounded-full">
                   Ver lojas abertas
@@ -236,9 +241,7 @@ export default function LandingPage() {
             <p className="text-sm text-muted-foreground">Recursos principais</p>
             <h2 className="text-3xl md:text-4xl font-black">Tudo para vender sem dor de cabeça</h2>
           </div>
-          <Link to="#planos">
-            <Button variant="outline" className="rounded-full">Comparar planos</Button>
-          </Link>
+          <Button variant="outline" className="rounded-full" onClick={scrollToPlans}>Comparar planos</Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -261,11 +264,9 @@ export default function LandingPage() {
             Se você quer algo simples para operar e forte para crescer, esse painel foi feito para você.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap mt-8">
-            <Link to="#planos">
-              <Button size="lg" className="h-12 rounded-full px-7">
-                Ver planos de lojista
-              </Button>
-            </Link>
+            <Button size="lg" className="h-12 rounded-full px-7" onClick={scrollToPlans}>
+              Ver planos de lojista
+            </Button>
             <Link to="/cliente">
               <Button size="lg" variant="outline" className="h-12 rounded-full px-7">
                 Sou cliente

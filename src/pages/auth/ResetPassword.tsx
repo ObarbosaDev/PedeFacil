@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
 
 const schema = z
@@ -46,8 +46,9 @@ export default function ResetPassword() {
       await updatePassword(data.password);
       toast.success("Senha atualizada com sucesso!");
       navigate("/login");
-    } catch (err: any) {
-      toast.error(err.message || "Não foi possível redefinir sua senha.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Não foi possível redefinir sua senha.";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -57,6 +58,12 @@ export default function ResetPassword() {
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="w-full max-w-md border-primary/20 shadow-xl">
         <CardContent className="p-6 sm:p-8">
+          <div className="mb-4">
+            <Link to="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar para login
+            </Link>
+          </div>
           <div className="mb-6">
             <p className="text-sm text-primary font-medium flex items-center gap-2">
               <Lock className="h-4 w-4" />
@@ -72,16 +79,16 @@ export default function ResetPassword() {
                 control={form.control}
                 name="password"
                 render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nova senha</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Digite sua nova senha" {...field} />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">{PASSWORD_RULE}</p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormItem>
+                    <FormLabel>Nova senha</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Digite sua nova senha" autoComplete="new-password" {...field} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">{PASSWORD_RULE}</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -90,7 +97,7 @@ export default function ResetPassword() {
                   <FormItem>
                     <FormLabel>Confirmar senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Repita a nova senha" {...field} />
+                      <Input type="password" placeholder="Repita a nova senha" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
