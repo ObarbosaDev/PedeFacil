@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,6 +80,12 @@ interface AppliedCoupon {
   discountAmount: number;
 }
 
+type StoredOrderIdempotencyContext = {
+  key: string;
+  fingerprint: string;
+  createdAt: string;
+};
+
 function calculateDiscount(subtotal: number, coupon: {
   discountType: DiscountType;
   discountValue: number;
@@ -107,6 +113,9 @@ export default function Checkout() {
   const [deliveryFeeMessage, setDeliveryFeeMessage] = useState<string>("");
   const serviceFee = 0;
   const draftStorageKey = `pedefacil.checkout.draft.${slug || "default"}`;
+  const orderIdempotencyStorageKey = `${draftStorageKey}.idempotency`;
+  const orderIdempotencyKeyRef = useRef<string>("");
+  const orderSubmitLockRef = useRef(false);
   const checkoutPath = `/loja/${slug}/checkout`;
   const loginHref = `/cliente/login?next=${encodeURIComponent(checkoutPath)}`;
   const registerHref = `/cliente/registro?next=${encodeURIComponent(checkoutPath)}&from=checkout`;
@@ -188,6 +197,45 @@ export default function Checkout() {
       // ignora rascunho inválido
     }
   }, [draftStorageKey, form, slug]);
+
+  const getOrCreateIdempotencyKey = (fingerprint: string) => {
+    const raw = localStorage.getItem(orderIdempotencyStorageKey);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as StoredOrderIdempotencyContext;
+        // Reaproveita a mesma chave somente quando o pedido é o mesmo (retry seguro).
+        if (parsed?.key && parsed?.fingerprint === fingerprint) {
+          orderIdempotencyKeyRef.current = parsed.key;
+          return parsed.key;
+        }
+      } catch {
+        // ignora contexto inválido e gera uma nova chave abaixo
+      }
+    }
+
+    const nextKey = `ord_${crypto.randomUUID()}`;
+    const payload: StoredOrderIdempotencyContext = {
+      key: nextKey,
+      fingerprint,
+      createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem(orderIdempotencyStorageKey, JSON.stringify(payload));
+    orderIdempotencyKeyRef.current = nextKey;
+    return nextKey;
+  };
+
+  const getFriendlyCheckoutError = (error: any) => {
+    const raw = String(error?.message || "").toLowerCase();
+    if (
+      raw.includes("failed to fetch") ||
+      raw.includes("network") ||
+      raw.includes("networkerror") ||
+      raw.includes("fetch")
+    ) {
+      return "Conexao oscilou. Pode tentar de novo: se o pedido ja tiver sido criado, a gente recupera sem duplicar.";
+    }
+    return error?.message || "Nao rolou enviar o pedido.";
+  };
 
   useEffect(() => {
     if (!slug) return;
@@ -467,6 +515,12 @@ export default function Checkout() {
 
   const orderMutation = useMutation({
     mutationFn: async (data: CheckoutForm) => {
+      if (orderSubmitLockRef.current) {
+        throw new Error("Seu pedido ja esta sendo enviado. Aguarde alguns segundos.");
+      }
+      orderSubmitLockRef.current = true;
+
+      try {
       const traceId = createTraceId();
       if (!user) throw new Error("Faça login para finalizar o pedido.");
 
@@ -479,12 +533,30 @@ export default function Checkout() {
         { onConflict: "user_id" }
       );
 
-      const { data: customer, error: custErr } = await supabase
+      let customerId: string | null = null;
+      const normalizedPhone = data.customerPhone.trim();
+      const normalizedName = data.customerName.trim();
+      const { data: existingCustomer, error: existingCustomerErr } = await supabase
         .from("customers")
-        .insert({ name: data.customerName, phone: data.customerPhone })
-        .select()
-        .single();
-      if (custErr) throw custErr;
+        .select("id")
+        .eq("phone", normalizedPhone)
+        .eq("name", normalizedName)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingCustomerErr) throw existingCustomerErr;
+
+      if (existingCustomer?.id) {
+        customerId = existingCustomer.id;
+      } else {
+        const { data: customer, error: custErr } = await supabase
+          .from("customers")
+          .insert({ name: normalizedName, phone: normalizedPhone })
+          .select("id")
+          .single();
+        if (custErr) throw custErr;
+        customerId = customer.id;
+      }
 
       const isDelivery = data.orderType === "delivery";
 
@@ -515,7 +587,7 @@ export default function Checkout() {
 
       const orderPayload: any = {
         establishment_id: establishment!.id,
-        customer_id: customer.id,
+        customer_id: customerId,
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
         order_type: data.orderType,
@@ -539,22 +611,41 @@ export default function Checkout() {
         delivery_reference: isDelivery ? data.deliveryReference || null : null,
       };
 
-      const { data: order, error: orderErr } = await supabase
-        .from("orders")
-        .insert(orderPayload)
-        .select()
-        .single();
-      if (orderErr) throw orderErr;
-
-      const orderItems = items.map((item) => ({
-        order_id: order.id,
+      const orderItemsPayload = items.map((item) => ({
         product_id: item.id,
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
       }));
-      const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
-      if (itemsErr) throw itemsErr;
+
+      const orderFingerprint = JSON.stringify({
+        establishmentId: establishment!.id,
+        userId: user.id,
+        orderType: data.orderType,
+        paymentMethod: data.paymentMethod,
+        total: finalTotal,
+        items: items.map((item) => ({ id: item.id, q: item.quantity, p: Number(item.price || 0) })),
+      });
+      const idempotencyKey = getOrCreateIdempotencyKey(orderFingerprint);
+
+      const { data: placedOrderRows, error: placeOrderError } = await (supabase as any).rpc("create_order_idempotent", {
+        p_idempotency_key: idempotencyKey,
+        p_order: orderPayload,
+        p_items: orderItemsPayload,
+      });
+      if (placeOrderError) throw placeOrderError;
+
+      const placedOrder = Array.isArray(placedOrderRows) ? placedOrderRows[0] : null;
+      if (!placedOrder?.order_id) {
+        throw new Error("Não foi possível gerar o pedido agora.");
+      }
+
+      const { data: order, error: orderFetchError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", placedOrder.order_id)
+        .single();
+      if (orderFetchError) throw orderFetchError;
 
       const { error: linkErr } = await (supabase as any).from("customer_order_links").upsert(
         {
@@ -578,7 +669,7 @@ export default function Checkout() {
 
       await supabase.from("loyalty_accounts").upsert(
         {
-          customer_id: customer.id,
+          customer_id: customerId,
           establishment_id: establishment!.id,
           points: Math.floor(finalTotal),
         },
@@ -590,10 +681,11 @@ export default function Checkout() {
         actorRole: "customer",
         entityType: "order",
         entityId: order.id,
-        action: "order_created_checkout",
+        action: placedOrder.created ? "order_created_checkout" : "order_reused_idempotency_checkout",
         metadata: withTrace(
           {
             establishmentId: establishment!.id,
+            idempotencyKey,
             orderType: data.orderType,
             paymentMethod: data.paymentMethod,
             couponCode: appliedCoupon?.code || null,
@@ -614,13 +706,18 @@ export default function Checkout() {
         eventName: "order_submitted",
         metadata: {
           orderId: order.id,
+          idempotencyKey,
+          created: !!placedOrder.created,
           orderType: data.orderType,
           paymentMethod: data.paymentMethod,
           total: finalTotal,
         },
       });
 
-      return { order, data };
+      return { order, data, created: !!placedOrder.created };
+      } finally {
+        orderSubmitLockRef.current = false;
+      }
     },
     onSuccess: (result) => {
       const message = generateWhatsAppMessage({
@@ -656,10 +753,12 @@ export default function Checkout() {
       openWhatsApp(establishment!.whatsapp, message);
       clearCart();
       localStorage.removeItem(draftStorageKey);
-      toast.success("Pedido enviado com sucesso.");
+      localStorage.removeItem(orderIdempotencyStorageKey);
+      orderIdempotencyKeyRef.current = "";
+      toast.success(result.created ? "Pedido enviado com sucesso." : "Pedido já estava registrado e foi recuperado.");
       navigate(`/loja/${slug}`);
     },
-    onError: (err: any) => toast.error(err.message || "Não rolou enviar o pedido."),
+    onError: (err: any) => toast.error(getFriendlyCheckoutError(err)),
   });
 
   if (!user) {
@@ -919,7 +1018,13 @@ export default function Checkout() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((d) => orderMutation.mutate(d))} className="space-y-4">
+                <form
+                  onSubmit={form.handleSubmit((d) => {
+                    if (orderMutation.isPending || orderSubmitLockRef.current) return;
+                    orderMutation.mutate(d);
+                  })}
+                  className="space-y-4"
+                >
                   <FormField control={form.control} name="customerName" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nome</FormLabel>
@@ -1088,6 +1193,5 @@ export default function Checkout() {
     </div>
   );
 }
-
 
 

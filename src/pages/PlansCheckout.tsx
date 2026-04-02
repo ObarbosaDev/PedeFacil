@@ -76,6 +76,17 @@ export default function PlansCheckout() {
       maximumFractionDigits: 0,
     }).format(value);
 
+  const getFriendlyPaymentConfirmError = (error: any) => {
+    const raw = String(error?.message || "").toLowerCase();
+    if (raw.includes("outra sessao")) {
+      return "Esse comprovante já foi usado em outra cobrança. Gere um novo checkout para continuar.";
+    }
+    if (raw.includes("failed to fetch") || raw.includes("network")) {
+      return "Conexao oscilou. Pode tentar confirmar de novo sem medo: nao vai duplicar pagamento.";
+    }
+    return error?.message || "Não rolou confirmar o pagamento agora.";
+  };
+
   const planPrice = useMemo(() => (plan ? getPlanPrice(plan, billingMode) : 0), [plan, billingMode]);
   const effectivePrice = useMemo(() => {
     if (checkout?.amount_cents) return checkout.amount_cents / 100;
@@ -151,7 +162,7 @@ export default function PlansCheckout() {
       await queryClient.invalidateQueries({ queryKey: ["store-panel-access", user?.id] });
     },
     onError: (error: any) => {
-      toast.error(error?.message || "Não rolou confirmar o pagamento agora.");
+      toast.error(getFriendlyPaymentConfirmError(error));
     },
   });
 
