@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks nao encontrado. Instale o gitleaks para continuar o commit."
+  echo "https://github.com/gitleaks/gitleaks"
+  exit 1
+fi
+
+echo "Rodando scan de segredos com gitleaks..."
+gitleaks detect --source . --no-git --redact --verbose

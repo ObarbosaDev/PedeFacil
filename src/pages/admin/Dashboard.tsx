@@ -10,6 +10,11 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PageLoader from "@/components/system/PageLoader";
+import StateCard from "@/components/system/StateCard";
+import { logClientError } from "@/lib/observability";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Bar, CartesianGrid, ComposedChart, Line, XAxis } from "recharts";
 
 const periodOptions = [
   { value: "7", label: "Últimos 7 dias" },
@@ -18,11 +23,34 @@ const periodOptions = [
 ] as const;
 
 type PeriodValue = (typeof periodOptions)[number]["value"];
+type ProductOriginFilter = "all" | "home" | "plans_page" | "checkout_page" | "auth";
+type ProductRoleFilter = "all" | "store_owner" | "customer" | "delivery_driver" | "unknown";
+
+const productFunnelChartConfig = {
+  planSelected: {
+    label: "Planos selecionados",
+    color: "hsl(var(--primary))",
+  },
+  checkoutStarted: {
+    label: "Checkout iniciado",
+    color: "hsl(var(--success))",
+  },
+  paymentConfirmed: {
+    label: "Pagamentos confirmados",
+    color: "hsl(var(--accent))",
+  },
+  conversionRate: {
+    label: "Conversão diária (%)",
+    color: "hsl(var(--warning))",
+  },
+} satisfies ChartConfig;
 
 export default function Dashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<PeriodValue>("30");
+  const [originFilter, setOriginFilter] = useState<ProductOriginFilter>("all");
+  const [roleFilter, setRoleFilter] = useState<ProductRoleFilter>("all");
 
   const periodStartIso = useMemo(() => {
     const days = Number(period);
@@ -32,7 +60,12 @@ export default function Dashboard() {
     return d.toISOString();
   }, [period]);
 
-  const { data: establishment } = useQuery({
+  const {
+    data: establishment,
+    isLoading: isLoadingEstablishment,
+    isError: isEstablishmentError,
+    error: establishmentError,
+  } = useQuery({
     queryKey: ["my-establishment"],
     queryFn: async () => {
       const { data } = await supabase
@@ -45,7 +78,12 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  const { data: orders = [] } = useQuery({
+  const {
+    data: orders = [],
+    isLoading: isLoadingOrders,
+    isError: isOrdersError,
+    error: ordersError,
+  } = useQuery({
     queryKey: ["dashboard-orders", establishment?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -100,6 +138,26 @@ export default function Dashboard() {
     enabled: !!establishment,
   });
 
+  const {
+    data: productEvents = [],
+    isError: isProductEventsError,
+    error: productEventsError,
+  } = useQuery({
+    queryKey: ["dashboard-product-events", periodStartIso],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("audit_logs")
+        .select("action, metadata, created_at")
+        .eq("entity_type", "product_event")
+        .gte("created_at", periodStartIso)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
   useEffect(() => {
     if (!establishment?.id) return;
 
@@ -127,6 +185,39 @@ export default function Dashboard() {
       void supabase.removeChannel(channel);
     };
   }, [establishment?.id, queryClient]);
+
+  useEffect(() => {
+    if (!isEstablishmentError || !establishmentError) return;
+    void logClientError({
+      scope: "query",
+      message: "Falha ao carregar estabelecimento no dashboard",
+      metadata: {
+        error: String(establishmentError),
+      },
+    });
+  }, [establishmentError, isEstablishmentError]);
+
+  useEffect(() => {
+    if (!isOrdersError || !ordersError) return;
+    void logClientError({
+      scope: "query",
+      message: "Falha ao carregar pedidos no dashboard",
+      metadata: {
+        error: String(ordersError),
+      },
+    });
+  }, [isOrdersError, ordersError]);
+
+  useEffect(() => {
+    if (!isProductEventsError || !productEventsError) return;
+    void logClientError({
+      scope: "query",
+      message: "Falha ao carregar eventos de funil comercial",
+      metadata: {
+        error: String(productEventsError),
+      },
+    });
+  }, [isProductEventsError, productEventsError]);
 
   const todayOrders = orders.filter(
     (order) => new Date(order.created_at).toDateString() === new Date().toDateString()
@@ -199,6 +290,138 @@ export default function Dashboard() {
     };
   }, [funnelEvents]);
 
+  const productFunnel = useMemo(() => {
+    const getEventSource = (event: any): ProductOriginFilter => {
+      const source = String(event?.metadata?.source || "").trim();
+      if (source === "home" || source === "plans_page" || source === "checkout_page" || source === "auth") return source;
+      if (event?.action === "funnel_home_cta_click") return "home";
+      if (String(event?.action || "").includes("checkout")) return "checkout_page";
+      if (String(event?.action || "").includes("login") || String(event?.action || "").includes("account")) return "auth";
+      if (String(event?.action || "").includes("plan")) return "plans_page";
+      return "home";
+    };
+
+    const getEventRole = (event: any): ProductRoleFilter => {
+      const role = String(event?.metadata?.role || "").trim();
+      if (role === "store_owner" || role === "customer" || role === "delivery_driver") return role;
+      return "unknown";
+    };
+
+    const filteredProductEvents = (productEvents as any[]).filter((event) => {
+      const matchesOrigin = originFilter === "all" || getEventSource(event) === originFilter;
+      const matchesRole = roleFilter === "all" || getEventRole(event) === roleFilter;
+      return matchesOrigin && matchesRole;
+    });
+
+    const totals = {
+      homeClicks: 0,
+      plansView: 0,
+      planSelected: 0,
+      checkoutStarted: 0,
+      paymentGenerated: 0,
+      paymentConfirmed: 0,
+      accountCreated: 0,
+      loginSuccess: 0,
+    };
+    const ctaTargets = new Map<string, number>();
+
+    for (const event of filteredProductEvents) {
+      const action = String(event.action || "");
+      if (action === "funnel_home_cta_click") {
+        totals.homeClicks += 1;
+        const target = String(event.metadata?.target || "sem_target");
+        ctaTargets.set(target, (ctaTargets.get(target) || 0) + 1);
+      }
+      if (action === "funnel_plans_view") totals.plansView += 1;
+      if (action === "funnel_plan_selected") totals.planSelected += 1;
+      if (action === "funnel_checkout_started") totals.checkoutStarted += 1;
+      if (action === "funnel_checkout_payment_generated") totals.paymentGenerated += 1;
+      if (action === "funnel_checkout_payment_confirmed") totals.paymentConfirmed += 1;
+      if (action === "funnel_account_created") totals.accountCreated += 1;
+      if (action === "funnel_login_success") totals.loginSuccess += 1;
+    }
+
+    const toPercent = (value: number, total: number) => (total > 0 ? (value / total) * 100 : 0);
+    const topTargets = Array.from(ctaTargets.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    return {
+      ...totals,
+      checkoutRate: toPercent(totals.checkoutStarted, totals.planSelected),
+      paymentRate: toPercent(totals.paymentConfirmed, totals.checkoutStarted),
+      planSelectionRate: toPercent(totals.planSelected, totals.plansView),
+      topTargets,
+    };
+  }, [originFilter, productEvents, roleFilter]);
+
+  const productFunnelDaily = useMemo(() => {
+    const days = Number(period);
+    const now = new Date();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - days + 1);
+
+    const byDate = new Map<
+      string,
+      { date: string; planSelected: number; checkoutStarted: number; paymentConfirmed: number; conversionRate: number }
+    >();
+
+    for (let i = 0; i < days; i += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const dateKey = date.toISOString().slice(0, 10);
+      byDate.set(dateKey, {
+        date: dateKey,
+        planSelected: 0,
+        checkoutStarted: 0,
+        paymentConfirmed: 0,
+        conversionRate: 0,
+      });
+    }
+
+    const getEventSource = (event: any): ProductOriginFilter => {
+      const source = String(event?.metadata?.source || "").trim();
+      if (source === "home" || source === "plans_page" || source === "checkout_page" || source === "auth") return source;
+      if (event?.action === "funnel_home_cta_click") return "home";
+      if (String(event?.action || "").includes("checkout")) return "checkout_page";
+      if (String(event?.action || "").includes("login") || String(event?.action || "").includes("account")) return "auth";
+      if (String(event?.action || "").includes("plan")) return "plans_page";
+      return "home";
+    };
+
+    const getEventRole = (event: any): ProductRoleFilter => {
+      const role = String(event?.metadata?.role || "").trim();
+      if (role === "store_owner" || role === "customer" || role === "delivery_driver") return role;
+      return "unknown";
+    };
+
+    const filteredProductEvents = (productEvents as any[]).filter((event) => {
+      const matchesOrigin = originFilter === "all" || getEventSource(event) === originFilter;
+      const matchesRole = roleFilter === "all" || getEventRole(event) === roleFilter;
+      return matchesOrigin && matchesRole;
+    });
+
+    for (const event of filteredProductEvents) {
+      const action = String(event.action || "");
+      const createdAt = new Date(event.created_at || now);
+      const dateKey = createdAt.toISOString().slice(0, 10);
+      const current = byDate.get(dateKey);
+      if (!current) continue;
+
+      if (action === "funnel_plan_selected") current.planSelected += 1;
+      if (action === "funnel_checkout_started") current.checkoutStarted += 1;
+      if (action === "funnel_checkout_payment_confirmed") current.paymentConfirmed += 1;
+    }
+
+    const rows = Array.from(byDate.values()).map((row) => {
+      const rate = row.checkoutStarted > 0 ? (row.paymentConfirmed / row.checkoutStarted) * 100 : 0;
+      return { ...row, conversionRate: Number(rate.toFixed(1)) };
+    });
+
+    return rows;
+  }, [originFilter, period, productEvents, roleFilter]);
+
   const exportOrdersCsv = () => {
     const header = ["id", "cliente", "telefone", "tipo", "status", "total", "criado_em"];
 
@@ -232,6 +455,22 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  if (isLoadingEstablishment) {
+    return <PageLoader label="Carregando visão geral da loja..." className="min-h-[70vh]" />;
+  }
+
+  if (isEstablishmentError) {
+    return (
+      <StateCard
+        kind="error"
+        title="Não rolou carregar sua loja agora"
+        description="A conexão oscilou ou faltou permissão. Atualize a página e tente de novo."
+        actionLabel="Voltar ao início"
+        actionHref="/"
+      />
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       <section className="rounded-2xl overflow-hidden border bg-card">
@@ -243,7 +482,7 @@ export default function Dashboard() {
               <p className="mt-2 opacity-90">
                 {establishment?.name
                   ? `Tudo centralizado para você tocar a operação da ${establishment.name}.`
-                  : "Configure sua loja para desbloquear todos os recursos do painel."}
+                  : "Configura sua loja para desbloquear todos os recursos do painel."}
               </p>
             </div>
             <Sparkles className="h-8 w-8 opacity-90" />
@@ -286,7 +525,17 @@ export default function Dashboard() {
             <CardTitle>Pedidos mais recentes</CardTitle>
           </CardHeader>
           <CardContent>
-            {orders.length === 0 ? (
+            {isLoadingOrders ? (
+              <p className="text-muted-foreground text-center py-8">Buscando pedidos mais recentes...</p>
+            ) : isOrdersError ? (
+              <StateCard
+                kind="error"
+                title="Falha ao carregar pedidos"
+                description="Tente atualizar em alguns segundos para continuar com os dados mais recentes."
+                actionLabel="Recarregar"
+                action={() => window.location.reload()}
+              />
+            ) : orders.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">Ainda não caiu nenhum pedido por aqui.</p>
             ) : (
               <div className="space-y-3">
@@ -400,6 +649,46 @@ export default function Dashboard() {
         </Card>
       </section>
 
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="w-[220px]">
+            <p className="text-xs text-muted-foreground mb-1">Filtrar por origem</p>
+            <Select value={originFilter} onValueChange={(value) => setOriginFilter(value as ProductOriginFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as origens</SelectItem>
+                <SelectItem value="home">Home</SelectItem>
+                <SelectItem value="plans_page">Planos</SelectItem>
+                <SelectItem value="checkout_page">Checkout</SelectItem>
+                <SelectItem value="auth">Auth (login/cadastro)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-[220px]">
+            <p className="text-xs text-muted-foreground mb-1">Filtrar por papel</p>
+            <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as ProductRoleFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os papéis</SelectItem>
+                <SelectItem value="store_owner">Lojista</SelectItem>
+                <SelectItem value="customer">Cliente</SelectItem>
+                <SelectItem value="delivery_driver">Entregador</SelectItem>
+                <SelectItem value="unknown">Sem papel definido</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Esses filtros impactam os cards e o gráfico diário do funil comercial.
+          </p>
+        </div>
+      </section>
+
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -449,7 +738,134 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Funil comercial (aquisição)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Cliques de CTA (home)</p>
+              <p className="text-2xl font-bold">{productFunnel.homeClicks}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Visitas em planos</p>
+              <p className="text-2xl font-bold">{productFunnel.plansView}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Planos selecionados</p>
+              <p className="text-2xl font-bold">{productFunnel.planSelected}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Checkout iniciado</p>
+              <p className="text-2xl font-bold">{productFunnel.checkoutStarted}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Cobranças geradas</p>
+              <p className="text-2xl font-bold">{productFunnel.paymentGenerated}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Pagamentos confirmados</p>
+              <p className="text-2xl font-bold">{productFunnel.paymentConfirmed}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Taxas e intenção de compra</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Planos → Seleção</span>
+              <span className="font-semibold">{productFunnel.planSelectionRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Seleção → Checkout</span>
+              <span className="font-semibold">{productFunnel.checkoutRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Checkout → Pagamento</span>
+              <span className="font-semibold">{productFunnel.paymentRate.toFixed(1)}%</span>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground mb-2">CTAs mais clicados</p>
+              {productFunnel.topTargets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ainda sem cliques suficientes neste período.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {productFunnel.topTargets.map(([target, count]) => (
+                    <div key={target} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground truncate">{target}</span>
+                      <span className="font-semibold">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Contas criadas no período</p>
+              <p className="text-lg font-bold">{productFunnel.accountCreated}</p>
+              <p className="text-xs text-muted-foreground mt-2">Logins concluídos no período</p>
+              <p className="text-lg font-bold">{productFunnel.loginSuccess}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Evolução diária do funil comercial</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {productFunnelDaily.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Ainda sem dados diários suficientes para o gráfico.</p>
+            ) : (
+              <ChartContainer config={productFunnelChartConfig} className="h-[320px] w-full">
+                <ComposedChart data={productFunnelDaily} margin={{ left: 8, right: 12, top: 8, bottom: 4 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    minTickGap={24}
+                    tickFormatter={(value) =>
+                      new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                    }
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(label) =>
+                          new Date(`${String(label)}T00:00:00`).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })
+                        }
+                      />
+                    }
+                  />
+                  <Bar dataKey="planSelected" fill="var(--color-planSelected)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="checkoutStarted" fill="var(--color-checkoutStarted)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="paymentConfirmed" fill="var(--color-paymentConfirmed)" radius={[6, 6, 0, 0]} />
+                  <Line
+                    type="monotone"
+                    dataKey="conversionRate"
+                    stroke="var(--color-conversionRate)"
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                  />
+                </ComposedChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }
+
 

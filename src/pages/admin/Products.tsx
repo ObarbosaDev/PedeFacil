@@ -138,7 +138,7 @@ export default function Products() {
   };
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro em "Minha Loja".</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja lá em "Minha Loja" primeiro.</p>;
   }
 
   return (
@@ -247,5 +247,6 @@ export default function Products() {
     </div>
   );
 }
+
 
 

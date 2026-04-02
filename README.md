@@ -1,102 +1,136 @@
-# PedeFacil
+﻿# Pede Fácil
 
-Plataforma SaaS para pequenos negocios venderem online com cardapio digital, checkout simplificado e pedidos via WhatsApp.
+Plataforma de pedidos para negócios locais venderem online com experiência premium para **cliente**, **lojista** e **entregador**, com operação centralizada, segurança reforçada e automações via WhatsApp.
 
-## 1. Product Overview
+## Visão do Produto
 
-O PedeFacil conecta tres experiencias em um unico fluxo:
+O Pede Fácil foi desenhado para profissionalizar a operação de delivery e retirada de pequenos e médios comércios sem complicar o dia a dia.
 
-- Cliente: escolhe loja, monta carrinho e finaliza pedido.
-- Lojista: recebe e gerencia pedidos em Kanban, controla catalogo e loja.
-- Operacao: dados salvos em Supabase com regras de seguranca (RLS).
+O sistema conecta três jornadas principais:
 
-Objetivo do produto:
+- Cliente: descobre lojas, monta pedido, aplica cupom, finaliza com conta segura e acompanha a entrega.
+- Lojista: gerencia cardápio, pedidos em Kanban, entregadores, cupons, automações e configurações de operação.
+- Entregador: recebe corridas, atualiza status, reporta ocorrências e confirma entrega com PIN.
 
-- reduzir friccao para vender online
-- acelerar atendimento no WhatsApp
-- dar controle de operacao para o lojista
+## Proposta de Valor
 
-## 2. Main Features
+- Aumentar conversão com cardápio e checkout modernos.
+- Reduzir atrito operacional com painel único de gestão.
+- Dar previsibilidade logística com fluxo de entregas e acompanhamento em tempo real.
+- Elevar segurança de acesso com múltiplas camadas de proteção.
 
-### 2.1 Cliente
+## Perfis e Módulos
 
-- Painel de lojas ativas em `/cliente`
-- Cardapio publico por slug em `/loja/:slug`
-- Carrinho com controle de quantidade
-- Checkout com dados do cliente e tipo de pedido
-- Geracao de mensagem para WhatsApp
+### Cliente
 
-### 2.2 Lojista
+- Conta obrigatória para compra (mais segurança para o comércio).
+- Login/cadastro com recuperação de senha.
+- Painel com lojas, favoritos, histórico, endereços e recompra.
+- Checkout com validações para entrega e retirada.
+- Aplicação de cupons.
 
-- Login e registro
-- Dashboard com visao geral
-- CRUD de categorias
-- CRUD de produtos (com disponibilidade)
-- Pedidos em Kanban com avancar status e cancelamento
-- Configuracoes da loja
-- Fidelidade por pontos
-- Cupons de desconto
-- Automacao de WhatsApp (webhook + templates + fila de eventos)
+### Lojista
 
-### 2.3 Plataforma
+- Dashboard operacional.
+- Pedidos em fluxo Kanban.
+- Produtos, categorias e configurações da loja.
+- Gestão de cupons e fidelidade.
+- Gestão de entregadores e despacho.
+- Configuração de automações WhatsApp.
 
-- Auth via Supabase
-- Banco Postgres com relacionamentos
-- RLS para isolamento por estabelecimento
-- Frontend responsivo com React + Tailwind + shadcn/ui
+### Entregador
 
-## 3. Status Flow de Pedidos
+- Login e painel de corridas.
+- Atualização de status da entrega.
+- Acesso rápido a rota e contato.
+- Registro de ocorrências.
+- Confirmação de entrega com código/PIN.
 
-Fluxo principal:
+## Segurança
 
-`received -> confirmed -> in_preparation -> ready -> delivered`
+Camadas atuais implementadas:
 
-Fluxo alternativo:
+- Proteção contra tentativas excessivas de login.
+- Recuperação de senha por e-mail.
+- OTP por e-mail como camada opcional.
+- Dispositivos confiáveis no perfil.
+- Step-up auth para ações críticas no painel do lojista.
+- RLS no Supabase para isolamento de dados entre contas/lojas.
 
-`any_non_final -> cancelled`
+## Planos e Modelo Comercial
 
-## 4. Tech Stack
+- Cliente final usa gratuitamente para comprar.
+- A assinatura é para lojistas (acesso ao painel e recursos por plano).
+- Checkout de plano com fluxo dedicado no produto.
 
-- Frontend: React 18, TypeScript, Vite
-- UI: TailwindCSS, shadcn/ui, Lucide
-- Data fetching/cache: TanStack Query
-- Forms/validation: React Hook Form + Zod
-- Backend BaaS: Supabase (Auth, Postgres, Storage)
-- Tests: Vitest (+ setup para testes de frontend)
+## Automação WhatsApp
 
-## 5. Requirements
+Suporte a:
+
+- Templates por evento.
+- Fila de eventos.
+- Worker para disparo.
+- Receiver backend para integração com provedores.
+
+Eventos comuns:
+
+- Novo pedido.
+- Mudança de status.
+- Aceite de entrega.
+- Pedido saiu para entrega.
+
+## Stack Tecnológica
+
+- Frontend: React 18, TypeScript, Vite.
+- UI: Tailwind CSS, shadcn/ui, Lucide.
+- Estado e dados: TanStack Query.
+- Formulários e validação: React Hook Form + Zod.
+- Backend de dados/autenticação: Supabase (Auth, Postgres, Storage, RLS).
+- Backend de automação: Spring Boot (Java 11).
+
+## Arquitetura Resumida
+
+- `src/pages`: telas por domínio (`admin`, `client`, `driver`, `public`, `auth`).
+- `src/components`: componentes visuais e layouts.
+- `src/hooks`: hooks de autenticação e estado.
+- `src/lib`: regras de negócio, segurança e utilitários.
+- `supabase/migrations`: evolução do schema.
+- `backend/`: receiver e integrações de automação.
+
+Referência completa de organização e governança:
+
+- `docs/PROJECT_STRUCTURE.md`
+
+## Como Rodar Local
+
+Pré-requisitos:
 
 - Node.js 18+
 - npm 9+
 - Java 11
 - Maven 3.9+
 
-## 6. Quick Start
-
-### 6.1 Frontend
+### 1) Instalar dependências
 
 ```bash
 npm install
-npm run dev
 ```
 
-Aplicacao local padrao:
+### 2) Configurar `.env`
 
-- http://localhost:5173
-
-### 6.2 Backend Java 11 (sem Docker)
+Copie o template versionado e preencha com seus valores:
 
 ```bash
-npm run backend:dev
+cp .env.example .env
 ```
 
-Backend local padrao:
+No Windows PowerShell:
 
-- http://localhost:8080
+```powershell
+Copy-Item .env.example .env
+```
 
-## 7. Environment Variables
-
-Crie `.env` na raiz do projeto:
+Depois ajuste o arquivo `.env` na raiz:
 
 ```env
 VITE_SUPABASE_URL="https://SEU-PROJETO.supabase.co"
@@ -104,286 +138,213 @@ VITE_SUPABASE_PUBLISHABLE_KEY="SUA_ANON_KEY"
 VITE_SUPABASE_PROJECT_ID="SEU_PROJECT_ID"
 ```
 
-Observacoes:
+Importante: o arquivo `.env` **nao deve** ser versionado no Git.
 
-- `VITE_*` fica exposto no bundle frontend. Nao coloque secrets sensiveis.
-- Use apenas chave anon/publicavel no frontend.
-
-## 8. Scripts
-
-- `npm run dev`: sobe ambiente local (Vite)
-- `npm run backend:dev`: sobe o receiver Java 11 (Spring Boot)
-- `npm run backend:build`: gera o jar do backend Java
-- `npm run backend:test`: roda os testes do backend Java
-- `npm run build`: build de producao
-- `npm run build:dev`: build com modo development
-- `npm run preview`: preview local do build
-- `npm run lint`: lint do projeto
-- `npm run test`: executa testes
-- `npm run test:watch`: testes em watch mode
-
-## 9. Database and Supabase
-
-### 9.1 Migrations
-
-- Local: `supabase/migrations/`
-
-### 9.2 Core Entities
-
-- `profiles`
-- `user_roles`
-- `establishments`
-- `categories`
-- `products`
-- `customers`
-- `orders`
-- `order_items`
-- `loyalty_accounts`
-- `coupons`
-- `whatsapp_automation_settings`
-- `whatsapp_message_templates`
-- `whatsapp_automation_events`
-
-### 9.3 Security (RLS)
-
-- Lojista acessa apenas dados vinculados ao seu estabelecimento
-- Cliente/anonimo pode criar pedidos e itens de pedido
-- Leitura publica para cardapio conforme politicas
-
-## 10. Routes Map
-
-### 10.1 Public
-
-- `/` landing page
-- `/cliente` painel do cliente
-- `/loja/:slug` cardapio publico
-- `/loja/:slug/checkout` checkout
-
-### 10.2 Auth
-
-- `/login`
-- `/registro`
-
-### 10.3 Admin
-
-- `/admin`
-- `/admin/pedidos`
-- `/admin/produtos`
-- `/admin/categorias`
-- `/admin/cupons`
-- `/admin/automacoes`
-- `/admin/loja`
-- `/admin/fidelidade`
-
-## 11. Automacao WhatsApp
-
-### 11.1 O que foi implementado
-
-- Configuracao por loja (`whatsapp_automation_settings`)
-- Templates por evento (`whatsapp_message_templates`)
-- Fila de eventos (`whatsapp_automation_events`)
-- Trigger no banco para enfileirar evento em:
-  - novo pedido
-  - mudanca de status do pedido
-- Worker via Edge Function:
-  - `supabase/functions/whatsapp-automation-worker/index.ts`
-  - processa pendentes/failed
-  - monta mensagem via template
-  - dispara para webhook
-  - atualiza status para `sent` ou `failed`
-
-### 11.2 Como ativar
-
-1. Aplicar migrations no Supabase (inclui `20260327160000_whatsapp_automation_base.sql`).
-2. Publicar Edge Function:
-
-```bash
-supabase functions deploy whatsapp-automation-worker
-```
-
-3. Configurar secret opcional para proteger execucao manual/cron:
-
-```bash
-supabase secrets set AUTOMATION_RUNNER_TOKEN="seu_token_forte"
-```
-
-4. No painel do lojista (`/admin/automacoes`):
-  - habilitar automacao
-  - informar `webhook_url`
-  - ajustar templates
-
-### 11.3 Execucao manual (teste)
-
-```bash
-curl -X POST "https://<project-ref>.functions.supabase.co/whatsapp-automation-worker" \
-  -H "Content-Type: application/json" \
-  -H "x-automation-runner-token: <AUTOMATION_RUNNER_TOKEN>" \
-  -d '{"limit":20}'
-```
-
-### 11.4 Sugestao de cron
-
-- Rodar a cada 1 minuto (GitHub Actions, cron externo, n8n ou scheduler do seu backend)
-- Chamar a Edge Function com token
-- Limite recomendado por ciclo: `20` a `50` eventos
-
-### 11.5 Receiver Java 11 pronto (webhook/provedor)
-
-Arquivos:
-
-- `backend/pom.xml`
-- `backend/src/main/java/com/pedefacil/automation/AutomationReceiverApplication.java`
-- `backend/src/main/resources/application.yml`
-- `backend/.env.example`
-
-Executar:
+### 3) Subir backend (terminal 1)
 
 ```bash
 npm run backend:dev
 ```
 
-Endpoints:
+Padrão: `http://localhost:8080`
 
-- `POST /webhook/pedefacil`
-- `GET /health`
+Se a porta estiver ocupada (PowerShell):
 
-Como configurar (sem Docker):
+```powershell
+$env:SERVER_PORT=8082; npm run backend:dev
+```
 
-1. Ajuste as variaveis de ambiente com base em `backend/.env.example` (arquivo de referencia).
-2. Rode o backend com Java 11 e Maven.
-3. Em `/admin/automacoes`, configure:
-   - `Webhook URL`: `https://seu-dominio.com/webhook/pedefacil`
-   - `Webhook secret`: mesmo valor de `PEDEFACIL_SIGNATURE_SECRET`
-4. Ative a automacao.
-
-Exemplo no PowerShell:
+### 4) Subir frontend (terminal 2)
 
 ```bash
-$env:OUTBOUND_MODE="log"
-$env:PEDEFACIL_SIGNATURE_SECRET="sua_chave_forte"
+npm run dev
+```
+
+Use a URL exibida no terminal (normalmente `http://localhost:8081` ou `http://localhost:5173`).
+
+## Bootstrap Rápido
+
+Comandos mínimos para preparar ambiente local com segurança:
+
+```bash
+npm install
+npm run setup:hooks
+```
+
+Depois:
+
+```bash
 npm run backend:dev
+npm run dev
 ```
 
-Modos suportados no receiver Java:
+## Migrations Obrigatórias
 
-- `OUTBOUND_MODE=webhook` (encaminha para endpoint proprio)
-- `OUTBOUND_MODE=evolution` (envia para Evolution API)
-- `OUTBOUND_MODE=zapi` (envia para Z-API)
-- `OUTBOUND_MODE=log` (somente log local para testes)
+Antes de homologar ou publicar, aplique todas as migrations do projeto no Supabase, com atenção especial para:
 
-### 11.6 Receiver Node (legado)
+- `20260401120000_store_subscription_billing.sql`
+- `20260401133000_account_security_upgrade.sql`
+- `20260401170000_delivery_proof_hardening.sql`
 
-Arquivo:
+Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
 
-- `automation/whatsapp-receiver.mjs`
+## Go-live em 5 Minutos
 
-Template de env:
+Fluxo rápido para validar prontidão:
 
-- `automation/.env.example`
+1. Abra `/admin/go-live`.
+2. Clique em `Rodar diagnostico`.
+3. Marque o checklist operacional.
+4. Execute a matriz PASS/FAIL completa.
+5. Verifique se os gates de liberação estão em `PASS`.
+6. Exporte `relatorio JSON` e `auditoria CSV`.
+7. Abra `/admin/go-live/apresentacao` para reunião com cliente.
 
-Executar:
+Critério de liberação recomendado:
+
+- Score >= 90%
+- Gates 100% em `PASS`
+- Conformidade de entrega >= 90%
+
+## Scripts Úteis
+
+- `npm run dev`: ambiente local frontend.
+- `npm run backend:dev`: backend Java local.
+- `npm run backend:build`: build do backend.
+- `npm run backend:test`: testes do backend.
+- `npm run check:repo`: bloqueia arquivos sensíveis rastreados no Git.
+- `npm run check:security`: alias para checks de segurança de repositório.
+- `npm run build`: build de produção frontend.
+- `npm run preview`: preview do build frontend.
+- `npm run lint`: análise estática.
+- `npm run test`: testes.
+
+## Rotas Principais
+
+- `/`: landing institucional.
+- `/planos`: visão de planos.
+- `/planos/checkout`: checkout de assinatura.
+- `/login`, `/registro`: acesso lojista.
+- `/cliente/login`, `/cliente/registro`, `/cliente/conta`: jornada cliente.
+- `/entregador/login`, `/entregador/registro`, `/entregador`: jornada entregador.
+- `/loja/:slug`: cardápio público.
+- `/loja/:slug/checkout`: checkout da loja.
+- `/admin/*`: painel do lojista.
+
+## Qualidade e Produção
+
+Checklist recomendado antes de publicar:
+
+- Rodar `npm run lint`.
+- Rodar `npm run test`.
+- Rodar `npm run build`.
+- Validar fluxo completo de cliente, lojista e entregador.
+- Revisar variáveis de ambiente no provedor.
+- Confirmar políticas RLS e permissões no Supabase.
+
+## Homologação PASS/FAIL
+
+Use a matriz da Central de Go-live e valide os 7 casos:
+
+1. Cliente finaliza pedido com sucesso.
+2. Pedido aparece e atualiza no Kanban.
+3. Despacho de entrega funciona.
+4. Entrega com PIN + foto + recebedor + GPS válido.
+5. Entrega com bypass de GPS + justificativa.
+6. Rastreio em tempo real no cliente.
+7. Exportação de auditoria CSV sem erro.
+
+Documente resultado e só libere após 100% PASS.
+
+## Segurança de Segredos
+
+- Nunca versionar segredos reais (`.env`, chaves privadas, tokens, credenciais SMTP/DB).
+- `VITE_SUPABASE_PUBLISHABLE_KEY` e `VITE_SUPABASE_URL` podem ficar no frontend (sao publicos por design).
+- Nunca expor `service_role` no frontend nem no Git.
+
+Se `.env` ou qualquer segredo já foi commitado no passado:
+
+1. Remover do versionamento (`git rm --cached .env`).
+2. Rotacionar imediatamente todas as credenciais afetadas.
+3. Revisar logs e acessos suspeitos.
+4. Revalidar CI com `secret-scan`.
+
+### Scan local (pre-commit)
+
+Ative os hooks versionados:
 
 ```bash
-npm run automation:receiver
+npm run setup:hooks
 ```
 
-Endpoint do receiver:
+Com isso, todo commit roda scan de segredos com `gitleaks`.
 
-- `POST /webhook/pedefacil`
-- `GET /health`
+### Scan no CI
 
-Como plugar com o painel (`/admin/automacoes`):
+Existe workflow em `.github/workflows/secret-scan.yml` para varredura automatica em `push` e `pull_request`.
 
-1. Em `Webhook URL`, coloque a URL publica do receiver + rota:
-   - `https://seu-dominio.com/webhook/pedefacil`
-2. Em `Webhook secret`, use o mesmo valor de `PEDEFACIL_SIGNATURE_SECRET`.
-3. Salve as configuracoes e ative a automacao.
+## Troubleshooting
 
-Modos suportados no receiver:
+### PowerShell bloqueando `npm`
 
-- `OUTBOUND_MODE=webhook` (encaminha para um endpoint seu)
-- `OUTBOUND_MODE=evolution` (envia para Evolution API)
-- `OUTBOUND_MODE=zapi` (envia para Z-API)
-- `OUTBOUND_MODE=log` (somente loga no console para teste)
-## 12. Project Structure
-
-```text
-src/
-|-- components/
-|   |-- dashboard/
-|   |-- layout/
-|   |-- store/
-|   `-- ui/
-|-- hooks/
-|-- integrations/
-|   `-- supabase/
-|-- lib/
-|-- pages/
-|   |-- admin/
-|   |-- auth/
-|   |-- client/
-|   `-- public/
-`-- test/
-```
-
-## 13. Deploy (GitHub + Hosting)
-
-Fluxo recomendado:
-
-1. Commit e push para `main`.
-2. No seu provedor de deploy, conecte o repositorio GitHub.
-3. Execute o build e publique.
-
-Comandos:
-
-```bash
-git add .
-git commit -m "feat: update"
-git push origin main
-```
-
-## 14. Production Checklist
-
-Antes de publicar:
-
-- Rodar `npm run lint`
-- Rodar `npm run test`
-- Rodar `npm run build`
-- Conferir variaveis de ambiente no deploy
-- Validar fluxo cliente completo (menu -> checkout -> pedido)
-- Validar fluxo lojista (kanban e atualizacao de status)
-
-## 15. Troubleshooting
-
-### `npm` bloqueado no PowerShell (ExecutionPolicy)
-
-Use:
+Use `npm.cmd`:
 
 ```bash
 npm.cmd run dev
 npm.cmd run build
 ```
 
-### Erro de build por dependencia faltando
+### Porta 8080 ocupada
 
-```bash
-npm install
-```
+- Encerrar processo que usa a porta.
+- Ou subir backend com outra porta (`SERVER_PORT`).
 
-### App abre sem dados
+### Aplicação sem dados
 
-- Confira `.env`
-- Verifique politicas RLS e tabelas no Supabase
-- Garanta que existam estabelecimentos ativos (`is_active = true`)
+- Verificar `.env`.
+- Conferir projeto/chaves Supabase.
+- Conferir migrations aplicadas.
+- Validar tabelas e políticas RLS.
 
-## 16. Future Improvements
+### Erro de schema no login/segurança
 
-- Drag-and-drop real no Kanban
-- Endereco de entrega estruturado no checkout
-- Pagamento online (gateway)
-- Notificacoes em tempo real para pedidos
-- Telemetria e metricas de conversao
+Exemplo comum:
 
-## 17. License
+- `Could not find the table 'public.user_security_settings'`
 
-Uso interno/proprietario (ajuste esta secao para sua licenca oficial quando necessario).
+Ação:
+
+- aplicar migration `20260401133000_account_security_upgrade.sql`
+- reiniciar frontend após a migration
+
+### Prova de entrega não salva
+
+Cheque:
+
+- bucket `delivery-proofs` existe
+- policies do bucket foram criadas
+- migration `20260401170000_delivery_proof_hardening.sql` aplicada
+- usuário entregador autenticado
+
+### Realtime não atualiza no rastreio
+
+Cheque:
+
+- diagnóstico `Realtime` em `/admin/go-live`
+- políticas RLS da tabela `order_deliveries`
+- bloqueios de rede/proxy no ambiente
+
+## Roadmap Sugerido
+
+- Plano executivo 30/60/90:
+  - `docs/ROADMAP_30_60_90.md`
+- Evolução contínua:
+  - Métricas avançadas de funil e retenção.
+  - Gestão financeira por loja.
+  - Regras de entrega por raio e horário.
+  - Notificações em tempo real mais robustas.
+  - Evolução de assinaturas e cobrança automática.
+
+## Licença
+
+Uso proprietário/interno. Ajuste esta seção quando definir a licença oficial do produto.

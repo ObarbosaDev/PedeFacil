@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+﻿import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -18,6 +18,9 @@ interface AuthContextType {
   signUpClient: (email: string, password: string, fullName: string, phone?: string) => Promise<void>;
   signUpDeliveryDriver: (email: string, password: string, fullName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  sendEmailOtp: (email: string) => Promise<void>;
+  verifyEmailOtp: (email: string, token: string) => Promise<void>;
+  confirmPassword: (password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -98,6 +101,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerSignInSuccess();
   };
 
+  const sendEmailOtp = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: normalizeEmail(email),
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+    if (error) throw error;
+  };
+
+  const verifyEmailOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email: normalizeEmail(email),
+      token: token.trim(),
+      type: "email",
+    });
+    if (error) throw error;
+  };
+
+  const confirmPassword = async (password: string) => {
+    if (!user?.email) throw new Error("Usuário sem e-mail para confirmação.");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: normalizeEmail(user.email),
+      password,
+    });
+    if (error) throw error;
+  };
+
   const resetPassword = async (email: string) => {
     const blockedSeconds = getResetBlockSeconds();
     if (blockedSeconds > 0) {
@@ -125,7 +156,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signUpClient, signUpDeliveryDriver, signIn, resetPassword, updatePassword, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        loading,
+        signUp,
+        signUpClient,
+        signUpDeliveryDriver,
+        signIn,
+        sendEmailOtp,
+        verifyEmailOtp,
+        confirmPassword,
+        resetPassword,
+        updatePassword,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -136,3 +183,4 @@ export function useAuth() {
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }
+

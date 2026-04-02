@@ -9,9 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { formatCurrency, formatDate, ORDER_STATUS_LABELS } from "@/lib/formatters";
 import { logAuditEvent } from "@/lib/observability";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
+import {
+  getCurrentDeviceLabel,
+  getSecuritySettings,
+  listTrustedDevices,
+  revokeTrustedDevice,
+  trustCurrentDevice,
+  updateSecuritySettings,
+} from "@/lib/account-security";
 import { toast } from "sonner";
 import { ArrowLeft, Lock, Plus, Repeat2, Trash2, User } from "lucide-react";
 
@@ -167,6 +176,18 @@ export default function ClientAccount() {
     enabled: !!user,
   });
 
+  const { data: securitySettings } = useQuery({
+    queryKey: ["user-security-settings", user?.id],
+    queryFn: async () => getSecuritySettings(user!.id),
+    enabled: !!user,
+  });
+
+  const { data: trustedDevices = [] } = useQuery({
+    queryKey: ["trusted-devices", user?.id],
+    queryFn: async () => listTrustedDevices(user!.id),
+    enabled: !!user,
+  });
+
   useEffect(() => {
     if (!profile) return;
     setProfileForm({
@@ -206,7 +227,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-profile", user?.id] });
       toast.success("Perfil salvo com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível salvar o perfil."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar o perfil."),
   });
 
   const saveAddressMutation = useMutation({
@@ -249,7 +270,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
       toast.success("Endereço salvo.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível salvar o endereço."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar o endereço."),
   });
 
   const setDefaultAddressMutation = useMutation({
@@ -279,7 +300,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
       toast.success("Endereço padrão atualizado.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível atualizar o endereço padrão."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar o endereço padrão."),
   });
 
   const deleteAddressMutation = useMutation({
@@ -303,7 +324,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
       toast.success("Endereço removido.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível remover o endereço."),
+    onError: (error: any) => toast.error(error.message || "Não rolou remover o endereço."),
   });
 
   const reorderMutation = useMutation({
@@ -312,7 +333,7 @@ export default function ClientAccount() {
       const store = order?.establishments;
 
       if (!order || !store?.slug) {
-        throw new Error("Não foi possível refazer este pedido agora.");
+        throw new Error("Não rolou refazer este pedido agora.");
       }
 
       const ids = (order.order_items || [])
@@ -387,7 +408,7 @@ export default function ClientAccount() {
 
       navigate(`/loja/${storeSlug}/checkout`);
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível refazer o pedido."),
+    onError: (error: any) => toast.error(error.message || "Não rolou refazer o pedido."),
   });
 
   const changePasswordMutation = useMutation({
@@ -421,7 +442,38 @@ export default function ClientAccount() {
       setPasswordForm({ newPassword: "", confirmNewPassword: "" });
       toast.success("Senha atualizada com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível atualizar sua senha."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar sua senha."),
+  });
+
+  const updateSecuritySettingsMutation = useMutation({
+    mutationFn: async (patch: Partial<{ otp_enabled: boolean; require_step_up_for_critical_actions: boolean }>) => {
+      await updateSecuritySettings(user!.id, patch);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-security-settings", user?.id] });
+      toast.success("Configurações de segurança atualizadas.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar as configurações de segurança."),
+  });
+
+  const trustCurrentDeviceMutation = useMutation({
+    mutationFn: async () => {
+      await trustCurrentDevice(user!.id, getCurrentDeviceLabel());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
+      toast.success("Este dispositivo foi adicionado como confiável.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou confiar neste dispositivo."),
+  });
+
+  const revokeTrustedDeviceMutation = useMutation({
+    mutationFn: async (deviceId: string) => revokeTrustedDevice(user!.id, deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
+      toast.success("Dispositivo removido da lista de confiáveis.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou remover o dispositivo."),
   });
 
   if (!loading && !user) return <Navigate to="/cliente/login" replace />;
@@ -564,34 +616,98 @@ export default function ClientAccount() {
               <Lock className="h-5 w-5 text-primary" />
               Segurança da conta
             </CardTitle>
-            <CardDescription>Atualize sua senha para manter seu acesso seguro.</CardDescription>
+            <CardDescription>Atualize sua senha e controle camadas extras de proteção.</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label>Nova senha</Label>
-              <Input
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                placeholder="Digite uma nova senha"
-                autoComplete="new-password"
-              />
-              <p className="text-xs text-muted-foreground mt-1">{PASSWORD_RULE}</p>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Nova senha</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                  placeholder="Digite uma nova senha"
+                  autoComplete="new-password"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{PASSWORD_RULE}</p>
+              </div>
+              <div>
+                <Label>Confirmar nova senha</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.confirmNewPassword}
+                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmNewPassword: e.target.value }))}
+                  placeholder="Repita a nova senha"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Button onClick={() => changePasswordMutation.mutate()} disabled={changePasswordMutation.isPending}>
+                  {changePasswordMutation.isPending ? "Atualizando senha..." : "Atualizar senha"}
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label>Confirmar nova senha</Label>
-              <Input
-                type="password"
-                value={passwordForm.confirmNewPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmNewPassword: e.target.value }))}
-                placeholder="Repita a nova senha"
-                autoComplete="new-password"
-              />
+
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">OTP no login</p>
+                  <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma acesso com código no e-mail.</p>
+                </div>
+                <Switch
+                  checked={!!securitySettings?.otp_enabled}
+                  onCheckedChange={(checked) => updateSecuritySettingsMutation.mutate({ otp_enabled: checked })}
+                  disabled={updateSecuritySettingsMutation.isPending}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">Verificação extra para ações sensíveis</p>
+                  <p className="text-xs text-muted-foreground">Pede confirmação adicional quando você fizer alterações críticas.</p>
+                </div>
+                <Switch
+                  checked={!!securitySettings?.require_step_up_for_critical_actions}
+                  onCheckedChange={(checked) =>
+                    updateSecuritySettingsMutation.mutate({ require_step_up_for_critical_actions: checked })
+                  }
+                  disabled={updateSecuritySettingsMutation.isPending}
+                />
+              </div>
             </div>
-            <div className="md:col-span-2">
-              <Button onClick={() => changePasswordMutation.mutate()} disabled={changePasswordMutation.isPending}>
-                {changePasswordMutation.isPending ? "Atualizando senha..." : "Atualizar senha"}
-              </Button>
+
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-semibold">Dispositivos confiáveis</p>
+                  <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular o OTP.</p>
+                </div>
+                <Button variant="outline" onClick={() => trustCurrentDeviceMutation.mutate()} disabled={trustCurrentDeviceMutation.isPending}>
+                  Confiar neste dispositivo
+                </Button>
+              </div>
+
+              {trustedDevices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum dispositivo confiável cadastrado.</p>
+              ) : (
+                trustedDevices.map((device) => (
+                  <div key={device.id} className="rounded-md border p-3 flex items-center justify-between gap-2 flex-wrap">
+                    <div>
+                      <p className="font-medium">{device.device_label || "Dispositivo"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Último uso: {formatDate(device.last_used_at)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => revokeTrustedDeviceMutation.mutate(device.id)}
+                      disabled={revokeTrustedDeviceMutation.isPending}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -665,4 +781,5 @@ export default function ClientAccount() {
     </div>
   );
 }
+
 

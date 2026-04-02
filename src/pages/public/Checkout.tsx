@@ -21,7 +21,7 @@ import { trackCheckoutEvent } from "@/lib/analytics";
 import { generateWhatsAppMessage, openWhatsApp } from "@/lib/whatsapp";
 import { createTraceId, logAuditEvent, withTrace } from "@/lib/observability";
 import { toast } from "sonner";
-import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent, ClipboardCheck, Sparkles } from "lucide-react";
 
 const checkoutSchema = z
   .object({
@@ -100,7 +100,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { items, total, clearCart } = useCart();
+  const { items, total, clearCart, addItem } = useCart();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
@@ -124,6 +124,21 @@ export default function Checkout() {
         .maybeSingle();
       return data;
     },
+  });
+
+  const { data: storeProducts = [] } = useQuery({
+    queryKey: ["checkout-products", establishment?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, price, image_url, is_available")
+        .eq("establishment_id", establishment!.id)
+        .eq("is_available", true)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment?.id,
   });
 
   const form = useForm<CheckoutForm>({
@@ -331,6 +346,30 @@ export default function Checkout() {
 
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
   const finalTotal = Math.max(Number((total - discountAmount + deliveryFee + serviceFee).toFixed(2)), 0);
+  const recommendations = useMemo(() => {
+    if (!storeProducts.length || !items.length) return [];
+
+    const inCartIds = new Set(items.map((item) => item.id));
+    const tokens = new Set(
+      items
+        .flatMap((item) => String(item.name || "").toLowerCase().split(/\s+/))
+        .filter((token) => token.length >= 4)
+    );
+    const cartAveragePrice = items.length
+      ? items.reduce((acc, item) => acc + Number(item.price || 0), 0) / items.length
+      : 0;
+
+    return (storeProducts as any[])
+      .filter((product) => !inCartIds.has(product.id))
+      .map((product) => {
+        const nameTokens = String(product.name || "").toLowerCase().split(/\s+/);
+        const overlap = nameTokens.reduce((acc, token) => acc + (tokens.has(token) ? 1 : 0), 0);
+        const priceDistance = Math.abs(Number(product.price || 0) - cartAveragePrice);
+        return { ...product, score: overlap * 10 - priceDistance / 10 };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4);
+  }, [items, storeProducts]);
   const values = form.watch();
   const requiredBaseFields = ["customerName", "customerPhone"] as const;
   const requiredDeliveryFields = ["deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryCity", "deliveryState", "deliveryZipCode"] as const;
@@ -417,7 +456,7 @@ export default function Checkout() {
       setCouponCode(coupon.code);
       toast.success(`Cupom ${coupon.code} aplicado com sucesso.`);
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível aplicar o cupom."),
+    onError: (error: any) => toast.error(error.message || "Não rolou aplicar o cupom."),
   });
 
   const removeCoupon = () => {
@@ -620,7 +659,7 @@ export default function Checkout() {
       toast.success("Pedido enviado com sucesso.");
       navigate(`/loja/${slug}`);
     },
-    onError: (err: any) => toast.error(err.message || "Não foi possível enviar o pedido."),
+    onError: (err: any) => toast.error(err.message || "Não rolou enviar o pedido."),
   });
 
   if (!user) {
@@ -754,6 +793,40 @@ export default function Checkout() {
                   <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
                 </div>
               ))}
+
+              {recommendations.length > 0 && (
+                <div className="rounded-lg border p-3 space-y-3 bg-muted/20">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Compre junto
+                  </p>
+                  <div className="space-y-2">
+                    {recommendations.map((product: any) => (
+                      <div key={`upsell-${product.id}`} className="rounded-md border bg-card p-2 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium line-clamp-1">{product.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatCurrency(Number(product.price || 0))}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            addItem({
+                              id: product.id,
+                              name: product.name,
+                              price: Number(product.price || 0),
+                              image_url: product.image_url || null,
+                            })
+                          }
+                        >
+                          Adicionar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-lg border p-3 space-y-3">
                 <div className="flex items-center gap-2">
@@ -1015,5 +1088,6 @@ export default function Checkout() {
     </div>
   );
 }
+
 
 

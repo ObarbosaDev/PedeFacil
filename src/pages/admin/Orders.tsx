@@ -32,6 +32,28 @@ const statusTone: Record<string, string> = {
   delivered: "border-l-zinc-400",
 };
 
+function getSlaColumnTone(lateRatio: number) {
+  if (lateRatio >= 0.4) {
+    return {
+      dot: "bg-red-500",
+      badgeVariant: "destructive" as const,
+      label: "Crítico",
+    };
+  }
+  if (lateRatio >= 0.15) {
+    return {
+      dot: "bg-amber-500",
+      badgeVariant: "secondary" as const,
+      label: "Atenção",
+    };
+  }
+  return {
+    dot: "bg-emerald-500",
+    badgeVariant: "outline" as const,
+    label: "No ritmo",
+  };
+}
+
 function playNewOrderSound() {
   try {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -55,6 +77,29 @@ function playNewOrderSound() {
   }
 }
 
+function playSlaAlertSound() {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(520, audioCtx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(410, audioCtx.currentTime + 0.24);
+
+    gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.03);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.28);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.3);
+  } catch {
+    // fallback silencioso
+  }
+}
+
 export default function Orders() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -65,6 +110,7 @@ export default function Orders() {
   const hasBootstrappedOrders = useRef(false);
   const knownOrderIds = useRef<Set<string>>(new Set());
   const autoRedispatchingOrderIds = useRef<Set<string>>(new Set());
+  const previousLateCount = useRef(0);
 
   useEffect(() => {
     setPage(1);
@@ -319,7 +365,7 @@ export default function Orders() {
       queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment?.id] });
       toast.success("Entrega despachada.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível despachar agora."),
+    onError: (error: any) => toast.error(error.message || "Não rolou despachar agora."),
   });
 
   const orderIds = useMemo(() => orders.map((order: any) => order.id), [orders]);
@@ -442,6 +488,56 @@ export default function Orders() {
     void run();
   }, [activeDeliveriesByDriver, deliveryDrivers, dispatchDelivery, establishment?.id, orderDeliveries]);
 
+  useEffect(() => {
+    if (!establishment?.id || !(deliveryDrivers as any[]).length || !orders.length) return;
+
+    const ordersWithoutDispatch = orders.filter((order: any) => {
+      if (order.order_type !== "delivery") return false;
+      if (!["confirmed", "in_preparation", "ready"].includes(order.status)) return false;
+      return !deliveryByOrderId[order.id];
+    });
+
+    if (!ordersWithoutDispatch.length) return;
+
+    const run = async () => {
+      for (const order of ordersWithoutDispatch) {
+        if (autoRedispatchingOrderIds.current.has(order.id)) continue;
+
+        const candidateDrivers = [...(deliveryDrivers as any[])]
+          .filter((driver) => {
+            if (!driver.is_active) return false;
+            if (!["online", "busy"].includes(driver.availability_mode || "")) return false;
+            const load = activeDeliveriesByDriver[driver.id] || 0;
+            const capacity = Number(driver.max_active_deliveries || 1);
+            return load < capacity;
+          })
+          .sort((a, b) => {
+            const loadA = activeDeliveriesByDriver[a.id] || 0;
+            const loadB = activeDeliveriesByDriver[b.id] || 0;
+            if (a.availability_mode !== b.availability_mode) {
+              return a.availability_mode === "online" ? -1 : 1;
+            }
+            return loadA - loadB;
+          });
+
+        const bestDriver = candidateDrivers[0];
+        if (!bestDriver) continue;
+
+        autoRedispatchingOrderIds.current.add(order.id);
+        try {
+          await dispatchDelivery.mutateAsync({ orderId: order.id, driverId: bestDriver.id });
+          toast.info(`Auto-despacho: ${order.customer_name} foi para ${bestDriver.full_name}.`);
+        } catch {
+          // erro ja tratado na mutation
+        } finally {
+          autoRedispatchingOrderIds.current.delete(order.id);
+        }
+      }
+    };
+
+    void run();
+  }, [activeDeliveriesByDriver, deliveryByOrderId, deliveryDrivers, dispatchDelivery, establishment?.id, orders]);
+
   const slaByStatus = useMemo(() => ({
     received: Number(slaSettings?.received_minutes || defaultSlaByStatus.received),
     confirmed: Number(slaSettings?.confirmed_minutes || defaultSlaByStatus.confirmed),
@@ -470,13 +566,38 @@ export default function Orders() {
     return { elapsedMinutes, limitMinutes, overtime, isLate: overtime > 0 };
   };
 
-  const ordersByStatus = kanbanColumns.map((status) => ({
-    status,
-    label: ORDER_STATUS_LABELS[status],
-    orders: orders.filter((order: any) => order.status === status),
-  }));
+  const ordersByStatus = kanbanColumns.map((status) => {
+    const columnOrders = orders.filter((order: any) => order.status === status);
+    const lateCount = columnOrders.reduce((acc, order) => {
+      const slaInfo = getSlaInfo(order);
+      return acc + (slaInfo?.isLate ? 1 : 0);
+    }, 0);
+    const lateRatio = columnOrders.length ? lateCount / columnOrders.length : 0;
+
+    return {
+      status,
+      label: ORDER_STATUS_LABELS[status],
+      orders: columnOrders,
+      lateCount,
+      lateRatio,
+      tone: getSlaColumnTone(lateRatio),
+    };
+  });
 
   const cancelledOrders = orders.filter((order: any) => order.status === "cancelled");
+  const lateOrders = orders.filter((order: any) => {
+    const slaInfo = getSlaInfo(order);
+    return Boolean(slaInfo?.isLate);
+  });
+
+  useEffect(() => {
+    const currentLateCount = lateOrders.length;
+    if (currentLateCount > previousLateCount.current) {
+      playSlaAlertSound();
+      toast.warning(`Atenção: ${currentLateCount} pedido(s) com SLA estourado.`);
+    }
+    previousLateCount.current = currentLateCount;
+  }, [lateOrders.length]);
 
   const summary = useMemo(() => {
     const inProgress = orders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
@@ -492,7 +613,7 @@ export default function Orders() {
   }, [orders, cancelledOrders.length, totalCount, deliveryDrivers, orderDeliveries]);
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro.</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja primeiro.</p>;
   }
 
   const fromItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -549,6 +670,20 @@ export default function Orders() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Rotas ativas</p><p className="text-2xl font-bold">{summary.deliveriesInRoute}</p></CardContent></Card>
       </div>
 
+      {lateOrders.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="font-semibold">SLA pedindo atenção</p>
+              <p className="text-sm text-muted-foreground">
+                Você tem <span className="font-semibold text-destructive">{lateOrders.length}</span> pedido(s) acima do tempo esperado.
+              </p>
+            </div>
+            <Badge variant="destructive">SLA estourado</Badge>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground">Mostrando {fromItem}-{toItem} de {totalCount} pedido(s)</p>
@@ -576,9 +711,20 @@ export default function Orders() {
                 <Card key={column.status} className={`w-[250px] shrink-0 border-l-4 ${statusTone[column.status]}`}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center justify-between gap-2">
-                      <span>{column.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${column.tone.dot}`} />
+                        {column.label}
+                      </span>
                       <span className="text-xs text-muted-foreground">{column.orders.length}</span>
                     </CardTitle>
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant={column.tone.badgeVariant} className="text-[11px]">
+                        SLA: {column.tone.label}
+                      </Badge>
+                      <p className="text-[11px] text-muted-foreground">
+                        {column.lateCount}/{column.orders.length || 0} atrasado(s)
+                      </p>
+                    </div>
                   </CardHeader>
 
                   <CardContent className="space-y-3 max-h-[70vh] overflow-y-auto">
@@ -640,7 +786,7 @@ export default function Orders() {
                                   )}
                                   {acceptTimeoutExpired && (
                                     <p className="text-[11px] font-semibold text-destructive">
-                                      Aceite expirado. Vale redespachar para nao travar a rota.
+                                      Aceite expirado. Vale redespachar para não travar a rota.
                                     </p>
                                   )}
                                   {delivery.confirmation_code && (
@@ -656,6 +802,32 @@ export default function Orders() {
                                   {delivery.issue_reason && (
                                     <p className="text-[11px] text-amber-700">
                                       Ocorrencia: <span className="font-semibold">{delivery.issue_reason}</span>
+                                    </p>
+                                  )}
+                                  {delivery.proof_image_url && (
+                                    <div className="mt-2">
+                                      <p className="text-[11px] text-muted-foreground mb-1">Prova de entrega:</p>
+                                      <img
+                                        src={delivery.proof_image_url}
+                                        alt="Prova de entrega"
+                                        className="h-20 w-20 rounded-md border object-cover"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  )}
+                                  {delivery.recipient_name && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      Recebido por: <span className="font-semibold text-foreground">{delivery.recipient_name}</span>
+                                    </p>
+                                  )}
+                                  {delivery.delivered_accuracy_meters != null && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      GPS: {Math.round(Number(delivery.delivered_accuracy_meters))}m de precisao
+                                    </p>
+                                  )}
+                                  {delivery.gps_bypass_reason && (
+                                    <p className="text-[11px] text-amber-700">
+                                      Justificativa sem GPS: <span className="font-semibold">{delivery.gps_bypass_reason}</span>
                                     </p>
                                   )}
                                 </div>
@@ -750,7 +922,7 @@ export default function Orders() {
                                       const selectedDriverCapacity = Number(selectedDriver?.max_active_deliveries || 1);
                                       const isSameDriver = delivery?.driver_id === selectedDriverId;
                                       if (!isSameDriver && selectedDriverLoad >= selectedDriverCapacity) {
-                                        toast.error("Esse entregador ja bateu o limite de corridas.");
+                                        toast.error("Esse entregador já bateu o limite de corridas.");
                                         return;
                                       }
                                       dispatchDelivery.mutate({ orderId: order.id, driverId: selectedDriverId });
@@ -818,4 +990,5 @@ export default function Orders() {
     </div>
   );
 }
+
 

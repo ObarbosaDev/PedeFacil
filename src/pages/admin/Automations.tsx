@@ -146,7 +146,7 @@ export default function Automations() {
 
   const saveSettingsMutation = useMutation({
     mutationFn: async () => {
-      if (!establishment) throw new Error("Configure sua loja primeiro.");
+      if (!establishment) throw new Error("Configura sua loja primeiro.");
 
       const payload = {
         establishment_id: establishment.id,
@@ -184,12 +184,12 @@ export default function Automations() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-automation-settings"] });
       toast.success("Configurações salvas com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível salvar as configurações."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar as configurações."),
   });
 
   const saveTemplatesMutation = useMutation({
     mutationFn: async () => {
-      if (!establishment) throw new Error("Configure sua loja primeiro.");
+      if (!establishment) throw new Error("Configura sua loja primeiro.");
 
       const payload = templateDefinitions.map((template) => ({
         establishment_id: establishment.id,
@@ -224,11 +224,11 @@ export default function Automations() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-automation-templates"] });
       toast.success("Templates salvos com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "Não foi possível salvar os templates."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar os templates."),
   });
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro em "Minha Loja".</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja lá em "Minha Loja" primeiro.</p>;
   }
 
   return (
@@ -421,5 +421,6 @@ export default function Automations() {
     </div>
   );
 }
+
 
 

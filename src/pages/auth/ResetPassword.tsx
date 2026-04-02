@@ -47,7 +47,7 @@ export default function ResetPassword() {
       toast.success("Senha atualizada com sucesso!");
       navigate("/login");
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Não foi possível redefinir sua senha.";
+      const message = error instanceof Error ? error.message : "Não rolou redefinir sua senha.";
       toast.error(message);
     } finally {
       setSaving(false);
@@ -59,10 +59,15 @@ export default function ResetPassword() {
       <Card className="w-full max-w-md border-primary/20 shadow-xl">
         <CardContent className="p-6 sm:p-8">
           <div className="mb-4">
-            <Link to="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar para login
-            </Link>
+            <div className="flex items-center justify-between">
+              <Link to="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4" />
+                Voltar para login
+              </Link>
+              <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+                Ir para início
+              </Link>
+            </div>
           </div>
           <div className="mb-6">
             <p className="text-sm text-primary font-medium flex items-center gap-2">
@@ -120,4 +125,5 @@ export default function ResetPassword() {
     </div>
   );
 }
+
 

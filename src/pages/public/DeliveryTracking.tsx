@@ -1,8 +1,10 @@
+﻿import { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Bike, MapPin, ShieldCheck } from "lucide-react";
 
@@ -16,8 +18,9 @@ const statusLabels: Record<string, string> = {
 
 export default function DeliveryTracking() {
   const { token } = useParams<{ token: string }>();
+  const previousStatusRef = useRef<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["delivery-tracking", token],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_delivery_tracking", {
@@ -28,6 +31,50 @@ export default function DeliveryTracking() {
     },
     enabled: !!token,
   });
+
+  useEffect(() => {
+    if (!token) return;
+
+    const channel = supabase
+      .channel(`tracking-realtime-${token}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "order_deliveries",
+          filter: `tracking_token=eq.${token}`,
+        },
+        () => {
+          void refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refetch, token]);
+
+  useEffect(() => {
+    if (!data?.delivery_status) return;
+
+    const previousStatus = previousStatusRef.current;
+    if (!previousStatus) {
+      previousStatusRef.current = data.delivery_status;
+      return;
+    }
+
+    if (previousStatus === data.delivery_status) return;
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("Atualizacao da entrega", {
+        body: statusLabels[data.delivery_status] || data.delivery_status,
+      });
+    }
+
+    previousStatusRef.current = data.delivery_status;
+  }, [data?.delivery_status]);
 
   if (isLoading) {
     return <p className="text-center py-12 text-muted-foreground">Carregando rastreio...</p>;
@@ -69,6 +116,23 @@ export default function DeliveryTracking() {
             <Badge variant="secondary">{data.delivery_status}</Badge>
           </CardContent>
         </Card>
+
+        {"Notification" in window && Notification.permission !== "granted" && (
+          <Card>
+            <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm text-muted-foreground">Ative alertas para receber notificacao quando o status mudar.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void Notification.requestPermission();
+                }}
+              >
+                Ativar alertas
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -141,6 +205,32 @@ export default function DeliveryTracking() {
               <MapPin className="h-4 w-4" />
               Se houver algum problema no trajeto, fale direto com a loja.
             </p>
+            {data.proof_image_url && (
+              <div className="mt-3">
+                <p className="font-medium text-foreground mb-2">Comprovacao da entrega</p>
+                <img
+                  src={data.proof_image_url}
+                  alt="Comprovacao da entrega"
+                  className="max-h-64 rounded-lg border object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            {data.recipient_name && (
+              <p className="mt-2">
+                Recebido por: <span className="font-semibold text-foreground">{data.recipient_name}</span>
+              </p>
+            )}
+            {data.delivered_accuracy_meters != null && (
+              <p className="mt-1 text-xs">
+                GPS da confirmacao: {Math.round(Number(data.delivered_accuracy_meters))}m de precisao.
+              </p>
+            )}
+            {data.gps_bypass_reason && (
+              <p className="mt-1 text-xs text-amber-700">
+                Entrega concluida com justificativa sem GPS: <span className="font-semibold">{data.gps_bypass_reason}</span>
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
