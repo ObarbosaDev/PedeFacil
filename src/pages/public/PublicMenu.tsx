@@ -86,6 +86,11 @@ export default function PublicMenu() {
     });
   }, [products, search]);
 
+  const featuredProducts = useMemo(() => {
+    const available = filteredProducts.filter((product: any) => product.is_available);
+    return available.slice(0, 3);
+  }, [filteredProducts]);
+
   const getProductsByCategory = (categoryId: string) => filteredProducts.filter((p: any) => p.category_id === categoryId);
   const uncategorized = filteredProducts.filter((p: any) => !p.category_id);
   const availableCount = filteredProducts.filter((p: any) => p.is_available).length;
@@ -240,6 +245,43 @@ export default function PublicMenu() {
       </section>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-10">
+        {featuredProducts.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-2xl font-black">Destaques da casa</h2>
+              <Badge variant="secondary" className="rounded-full">Pra pedir rapidinho</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {featuredProducts.map((product: any) => (
+                <Card key={`featured-${product.id}`} className="border-primary/20">
+                  <CardContent className="p-4 space-y-3">
+                    <div>
+                      <p className="font-semibold line-clamp-1">{product.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {product.description || "Um dos queridinhos do cardápio."}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={() =>
+                        handleAddItem({
+                          id: product.id,
+                          name: product.name,
+                          price: Number(product.price),
+                          image_url: product.image_url,
+                        })
+                      }
+                    >
+                      Adicionar ao carrinho
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
         {categories.map((category: any) => {
           const catProducts = getProductsByCategory(category.id);
           if (catProducts.length === 0) return null;

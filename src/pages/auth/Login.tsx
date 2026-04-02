@@ -1,15 +1,25 @@
-﻿import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+﻿import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  getSecuritySettings,
+  isCurrentDeviceTrusted,
+  touchCurrentTrustedDevice,
+  trustCurrentDevice,
+} from "@/lib/account-security";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, BarChart3, MessageCircle, ShieldCheck, Store } from "lucide-react";
+import { ArrowRight, BarChart3, Eye, EyeOff, Lock, MessageCircle, ShieldCheck, Store } from "lucide-react";
+import { getFriendlyAuthError } from "@/lib/auth-errors";
+import { trackProductEvent } from "@/lib/product-analytics";
 
 const loginSchema = z.object({
   email: z.string().trim().email("E-mail inválido"),
@@ -19,11 +29,29 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, signOut, sendEmailOtp, verifyEmailOtp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpResendCooldown, setOtpResendCooldown] = useState(0);
+  const [trustThisDevice, setTrustThisDevice] = useState(true);
+
+  const next = searchParams.get("next");
+  const safeNext = next && next.startsWith("/") ? next : "/admin";
+
+  useEffect(() => {
+    if (otpResendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setOtpResendCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [otpResendCooldown]);
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -41,139 +69,254 @@ export default function Login() {
     try {
       setLoading(true);
       await signIn(data.email, data.password);
+      const { data: userResponse } = await supabase.auth.getUser();
+      const currentUser = userResponse.user;
+      if (!currentUser) throw new Error("Sessão inválida após login.");
+
+      const settings = await getSecuritySettings(currentUser.id);
+      if (settings.otp_enabled) {
+        const trusted = await isCurrentDeviceTrusted(currentUser.id);
+        if (!trusted) {
+          await sendEmailOtp(data.email);
+          await signOut();
+          setOtpEmail(data.email.trim().toLowerCase());
+          setOtpCode("");
+          setOtpResendCooldown(45);
+          setOtpStep(true);
+          toast.success("Enviamos um código de acesso no seu e-mail.");
+          return;
+        }
+        await touchCurrentTrustedDevice(currentUser.id);
+      }
+
       setFailedAttempts(0);
       setBlockedUntil(null);
-      navigate("/admin");
-    } catch {
+      void trackProductEvent("funnel_login_success", { role: "store_owner" });
+      navigate(safeNext);
+    } catch (error: unknown) {
       const nextFailedAttempts = failedAttempts + 1;
       setFailedAttempts(nextFailedAttempts);
       if (nextFailedAttempts >= 5) {
         const cooldownMs = 30_000;
         setBlockedUntil(Date.now() + cooldownMs);
       }
-      toast.error("Não foi possível entrar. Confere seu e-mail e senha.");
+      toast.error(getFriendlyAuthError(error));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleVerifyOtp = async () => {
+    if (!otpEmail || otpCode.trim().length !== 6) {
+      toast.error("Digite o código de 6 dígitos.");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      await verifyEmailOtp(otpEmail, otpCode);
+      const { data: userResponse } = await supabase.auth.getUser();
+      const loggedUser = userResponse.user;
+      if (!loggedUser) throw new Error("Não rolou validar seu acesso.");
+
+      if (trustThisDevice) {
+        await trustCurrentDevice(loggedUser.id);
+      }
+
+      toast.success("Código validado. Acesso liberado.");
+      void trackProductEvent("funnel_login_success", { role: "store_owner", method: "otp" });
+      navigate(safeNext);
+    } catch (error: any) {
+      toast.error(getFriendlyAuthError(error));
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!otpEmail || otpResendCooldown > 0) return;
+
+    try {
+      setOtpLoading(true);
+      await sendEmailOtp(otpEmail);
+      setOtpResendCooldown(45);
+      toast.success("Código reenviado para seu e-mail.");
+    } catch (error: any) {
+      toast.error(getFriendlyAuthError(error));
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-orange-300/20 blur-3xl" />
-      </div>
+    <AuthSplitLayout
+      leftEyebrow="Acesso do lojista"
+      leftTitle="Seu painel de pedidos, com cara de operação grande."
+      leftDescription="Entre para acompanhar pedidos, atualizar cardápio e tocar a loja com visão clara do que importa."
+      leftHighlights={[
+        { icon: MessageCircle, text: "Pedido chega no WhatsApp já organizadinho." },
+        { icon: BarChart3, text: "Leitura da operação em tempo real, sem adivinhação." },
+        { icon: ShieldCheck, text: "Acesso seguro com proteção contra tentativas excessivas." },
+      ]}
+      formEyebrow="Acesso do lojista"
+      formTitle={otpStep ? "Confirmação de segurança" : "Bora entrar no painel?"}
+      formDescription={otpStep ? "Digite o código enviado no e-mail para liberar seu acesso." : "Coloque seus dados e continue de onde parou."}
+      formIcon={Store}
+      backTo="/"
+      backLabel="Voltar para início"
+      secondaryTo="/"
+      secondaryLabel="Ir para home"
+      leftTone="dark"
+      formTone="orange"
+      quickPoints={["Sessão protegida", "Bloqueio anti-força bruta", "Acesso imediato ao painel"]}
+    >
+      {!otpStep ? (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>E-mail</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="seunome@empresa.com" autoComplete="email" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-      <div className="min-h-screen grid lg:grid-cols-2 relative z-10">
-        <section className="hidden lg:flex p-10 xl:p-14">
-          <div className="w-full rounded-3xl bg-gradient-to-br from-primary via-primary to-orange-500 text-primary-foreground p-10 flex flex-col justify-between">
-            <div>
-              <Link to="/" className="inline-flex items-center gap-1 mb-8">
-                <span className="text-3xl font-black">Pede</span>
-                <span className="text-3xl font-black">Fácil</span>
-              </Link>
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Senha</FormLabel>
+                    <Link to="/esqueci-senha" className="text-xs text-orange-400 hover:text-orange-300 hover:underline">
+                      Esqueci minha senha
+                    </Link>
+                  </div>
+                  <FormControl>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Digite sua senha"
+                        autoComplete="current-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className="pr-11"
+                        onKeyUp={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
+                        onBlur={() => setCapsLockOn(false)}
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((value) => !value)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </FormControl>
+                  {capsLockOn ? (
+                    <p className="text-xs text-amber-700 inline-flex items-center gap-1">
+                      <Lock className="h-3.5 w-3.5" />
+                      Caps Lock ativado.
+                    </p>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <h1 className="text-4xl font-black leading-tight">Seu painel de pedidos, do jeito certo.</h1>
-              <p className="mt-4 text-lg opacity-90 max-w-md">
-                Entre para acompanhar os pedidos, atualizar o cardápio e tocar a operação sem sufoco.
+            <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={loading || (!!blockedUntil && Date.now() < blockedUntil)}>
+              {loading ? "Entrando..." : "Entrar no painel"}
+              {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
+            </Button>
+
+            {!!blockedUntil && Date.now() < blockedUntil ? (
+              <p className="text-xs text-amber-300" aria-live="polite">
+                Muita tentativa em sequência. Aguarde um pouco e tente de novo.
               </p>
-            </div>
+            ) : null}
 
-            <div className="space-y-3">
-              <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
-                <MessageCircle className="h-5 w-5" />
-                <p>Pedido chega no WhatsApp já organizadinho.</p>
-              </div>
-              <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
-                <BarChart3 className="h-5 w-5" />
-                <p>Visão em tempo real da sua operação.</p>
-              </div>
-              <div className="rounded-xl bg-white/10 border border-white/20 p-4 flex items-center gap-3">
-                <ShieldCheck className="h-5 w-5" />
-                <p>Dados protegidos e acesso seguro.</p>
-              </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-300">
+              <p className="font-semibold">Proteção ativa</p>
+              <p className="mt-1">Bloqueio temporário após tentativas seguidas e autenticação com sessão segura.</p>
             </div>
+          </form>
+        </Form>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-zinc-200">Confirmação por código</p>
+            <p className="text-xs text-zinc-300 mt-1">
+              Enviamos um código de 6 dígitos para <span className="font-semibold text-zinc-200">{otpEmail}</span>.
+            </p>
           </div>
-        </section>
 
-        <section className="flex items-center justify-center p-6 sm:p-8">
-          <Card className="w-full max-w-md border-primary/20 shadow-xl">
-            <CardContent className="p-6 sm:p-8">
-              <div className="mb-4">
-                <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4" />
-                  Voltar para início
-                </Link>
-              </div>
-              <div className="lg:hidden mb-6">
-                <Link to="/" className="inline-flex items-center gap-1">
-                  <span className="text-2xl font-black text-primary">Pede</span>
-                  <span className="text-2xl font-black">Fácil</span>
-                </Link>
-              </div>
+          <div className="flex justify-center">
+            <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
 
-              <div className="mb-6">
-                <p className="text-sm text-primary font-medium flex items-center gap-2">
-                  <Store className="h-4 w-4" />
-                  Acesso do lojista
-                </p>
-                <h2 className="text-2xl font-black mt-1">Bora entrar?</h2>
-                <p className="text-muted-foreground mt-1">Coloque seus dados e abra seu painel.</p>
-              </div>
+          <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={trustThisDevice}
+              onChange={(event) => setTrustThisDevice(event.target.checked)}
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+            />
+            Confiar neste dispositivo por 30 dias
+          </label>
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>E-mail</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="seunome@empresa.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <div className="flex gap-2">
+            <Button className="flex-1 h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" onClick={handleVerifyOtp} disabled={otpLoading || otpCode.trim().length !== 6}>
+              {otpLoading ? "Validando..." : "Validar código"}
+            </Button>
+            <Button variant="outline" onClick={handleResendOtp} disabled={otpLoading || otpResendCooldown > 0}>
+              {otpResendCooldown > 0 ? `Reenviar em ${otpResendCooldown}s` : "Reenviar"}
+            </Button>
+          </div>
 
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between">
-                          <FormLabel>Senha</FormLabel>
-                          <Link to="/esqueci-senha" className="text-xs text-primary hover:underline">
-                            Esqueci minha senha
-                          </Link>
-                        </div>
-                        <FormControl>
-                          <Input type="password" placeholder="Digite sua senha" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setOtpStep(false);
+              setOtpCode("");
+            }}
+          >
+            Voltar para o login
+          </Button>
+        </div>
+      )}
 
-                  <Button type="submit" className="w-full h-11" disabled={loading || (!!blockedUntil && Date.now() < blockedUntil)}>
-                    {loading ? "Entrando..." : "Entrar no painel"}
-                    {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
-                  </Button>
-                </form>
-              </Form>
-
-              <p className="text-center text-sm text-muted-foreground mt-6">
-                Ainda não tem conta?{" "}
-                <Link to="/registro" className="text-primary font-semibold hover:underline">
-                  Criar conta grátis
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
-        </section>
-      </div>
-    </div>
+      <p className="text-center text-sm text-zinc-300">
+        Ainda não tem conta?{" "}
+        <Link
+          to={`/registro${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
+          className="text-orange-400 font-semibold hover:text-orange-300 hover:underline"
+        >
+          Criar conta grátis
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 }
+
+
+
 

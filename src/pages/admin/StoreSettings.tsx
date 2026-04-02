@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,16 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { slugify } from "@/lib/formatters";
 import { toast } from "sonner";
-import { ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Plus, Shield, Trash2 } from "lucide-react";
 import { validateImageFile } from "@/lib/security";
+import {
+  getCurrentDeviceLabel,
+  getSecuritySettings,
+  listTrustedDevices,
+  revokeTrustedDevice,
+  trustCurrentDevice,
+  updateSecuritySettings,
+} from "@/lib/account-security";
+import { hasRecentStepUp, markStepUpVerified } from "@/lib/step-up";
 
 export default function StoreSettings() {
-  const { user } = useAuth();
+  const { user, confirmPassword } = useAuth();
   const queryClient = useQueryClient();
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [stepUpPassword, setStepUpPassword] = useState("");
+  const [stepUpLoading, setStepUpLoading] = useState(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
 
   const { data: establishment, isLoading } = useQuery({
     queryKey: ["my-establishment"],
@@ -52,6 +67,18 @@ export default function StoreSettings() {
       return data;
     },
     enabled: !!establishment,
+  });
+
+  const { data: securitySettings } = useQuery({
+    queryKey: ["store-security-settings", user?.id],
+    queryFn: async () => getSecuritySettings(user!.id),
+    enabled: !!user,
+  });
+
+  const { data: trustedDevices = [] } = useQuery({
+    queryKey: ["store-trusted-devices", user?.id],
+    queryFn: async () => listTrustedDevices(user!.id),
+    enabled: !!user,
   });
 
   const [form, setForm] = useState({
@@ -99,6 +126,48 @@ export default function StoreSettings() {
       readyMinutes: String(slaSettings.ready_minutes || 10),
     });
   }, [slaSettings]);
+
+  const runCriticalAction = (action: () => void) => {
+    if (!user) return;
+    if (!securitySettings?.require_step_up_for_critical_actions) {
+      action();
+      return;
+    }
+
+    const alreadyVerified = hasRecentStepUp(user.id, "admin-critical", 10);
+    if (alreadyVerified) {
+      action();
+      return;
+    }
+
+    pendingActionRef.current = action;
+    setStepUpPassword("");
+    setStepUpOpen(true);
+  };
+
+  const confirmStepUpAuth = async () => {
+    if (!stepUpPassword.trim()) {
+      toast.error("Digite sua senha para continuar.");
+      return;
+    }
+
+    try {
+      setStepUpLoading(true);
+      await confirmPassword(stepUpPassword.trim());
+      if (!user) throw new Error("Sessão inválida.");
+      markStepUpVerified(user.id, "admin-critical");
+      setStepUpOpen(false);
+      setStepUpPassword("");
+      const pending = pendingActionRef.current;
+      pendingActionRef.current = null;
+      pending?.();
+      toast.success("Verificação concluída.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não rolou validar sua senha.");
+    } finally {
+      setStepUpLoading(false);
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -156,7 +225,7 @@ export default function StoreSettings() {
       queryClient.invalidateQueries({ queryKey: ["store-delivery-zones"] });
       toast.success("Zona de entrega salva.");
     },
-    onError: (err: any) => toast.error(err.message || "Não foi possível salvar a zona."),
+    onError: (err: any) => toast.error(err.message || "Não rolou salvar a zona."),
   });
 
   const deleteZoneMutation = useMutation({
@@ -168,7 +237,7 @@ export default function StoreSettings() {
       queryClient.invalidateQueries({ queryKey: ["store-delivery-zones"] });
       toast.success("Zona removida.");
     },
-    onError: (err: any) => toast.error(err.message || "Não foi possível remover a zona."),
+    onError: (err: any) => toast.error(err.message || "Não rolou remover a zona."),
   });
 
   const saveSlaMutation = useMutation({
@@ -195,7 +264,38 @@ export default function StoreSettings() {
       queryClient.invalidateQueries({ queryKey: ["store-sla-settings"] });
       toast.success("SLA salvo com sucesso.");
     },
-    onError: (err: any) => toast.error(err.message || "Não foi possível salvar o SLA."),
+    onError: (err: any) => toast.error(err.message || "Não rolou salvar o SLA."),
+  });
+
+  const updateSecuritySettingsMutation = useMutation({
+    mutationFn: async (patch: Partial<{ otp_enabled: boolean; require_step_up_for_critical_actions: boolean }>) => {
+      await updateSecuritySettings(user!.id, patch);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-security-settings", user?.id] });
+      toast.success("Configurações de segurança atualizadas.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar as configurações."),
+  });
+
+  const trustCurrentDeviceMutation = useMutation({
+    mutationFn: async () => {
+      await trustCurrentDevice(user!.id, getCurrentDeviceLabel());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-trusted-devices", user?.id] });
+      toast.success("Este dispositivo foi adicionado como confiável.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou confiar neste dispositivo."),
+  });
+
+  const revokeTrustedDeviceMutation = useMutation({
+    mutationFn: async (deviceId: string) => revokeTrustedDevice(user!.id, deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-trusted-devices", user?.id] });
+      toast.success("Dispositivo removido da lista de confiáveis.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou remover o dispositivo."),
   });
 
   const handleUploadLogo = async (file?: File) => {
@@ -222,13 +322,13 @@ export default function StoreSettings() {
       setForm((prev) => ({ ...prev, logo_url: data.publicUrl }));
       toast.success("Logo enviado com sucesso.");
     } catch (err: any) {
-      toast.error(err.message || "Não foi possível enviar o logo.");
+      toast.error(err.message || "Não rolou enviar o logo.");
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  if (isLoading) return <p className="text-center py-12 text-muted-foreground">Carregando...</p>;
+  if (isLoading) return <p className="text-center py-12 text-muted-foreground">Carregando, só um instante...</p>;
 
   const slug = slugify(form.name || "minha-loja");
   const publicUrl = `${window.location.origin}/loja/${slug}`;
@@ -301,7 +401,7 @@ export default function StoreSettings() {
               <img src={form.logo_url} alt="Preview do logo" className="h-20 w-20 rounded-md object-cover" />
             </div>
           )}
-          <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!form.name || !form.whatsapp}>
+          <Button className="w-full" onClick={() => runCriticalAction(() => saveMutation.mutate())} disabled={!form.name || !form.whatsapp}>
             {establishment ? "Salvar alterações" : "Criar loja"}
           </Button>
         </CardContent>
@@ -336,7 +436,7 @@ export default function StoreSettings() {
               </div>
             </div>
 
-            <Button onClick={() => saveZoneMutation.mutate()} disabled={saveZoneMutation.isPending}>
+            <Button onClick={() => runCriticalAction(() => saveZoneMutation.mutate())} disabled={saveZoneMutation.isPending}>
               <Plus className="h-4 w-4 mr-2" />
               {saveZoneMutation.isPending ? "Salvando..." : "Adicionar zona"}
             </Button>
@@ -356,7 +456,7 @@ export default function StoreSettings() {
                         <p className="text-sm text-muted-foreground">Frete grátis acima de R$ {Number(zone.free_over_value).toFixed(2)}</p>
                       )}
                     </div>
-                    <Button variant="destructive" size="sm" onClick={() => deleteZoneMutation.mutate(zone.id)}>
+                    <Button variant="destructive" size="sm" onClick={() => runCriticalAction(() => deleteZoneMutation.mutate(zone.id))}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -391,13 +491,113 @@ export default function StoreSettings() {
                 <Input value={slaForm.readyMinutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, readyMinutes: e.target.value }))} />
               </div>
             </div>
-            <Button onClick={() => saveSlaMutation.mutate()} disabled={saveSlaMutation.isPending}>
+            <Button onClick={() => runCriticalAction(() => saveSlaMutation.mutate())} disabled={saveSlaMutation.isPending}>
               {saveSlaMutation.isPending ? "Salvando SLA..." : "Salvar SLA"}
             </Button>
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            Segurança do acesso
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold">OTP no login</p>
+                <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma o login com código no e-mail.</p>
+              </div>
+              <Switch
+                checked={!!securitySettings?.otp_enabled}
+                onCheckedChange={(checked) => updateSecuritySettingsMutation.mutate({ otp_enabled: checked })}
+                disabled={updateSecuritySettingsMutation.isPending}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold">Step-up em alterações críticas</p>
+                <p className="text-xs text-muted-foreground">Antes de salvar dados sensíveis da loja, pede confirmação da sua senha.</p>
+              </div>
+              <Switch
+                checked={!!securitySettings?.require_step_up_for_critical_actions}
+                onCheckedChange={(checked) =>
+                  updateSecuritySettingsMutation.mutate({ require_step_up_for_critical_actions: checked })
+                }
+                disabled={updateSecuritySettingsMutation.isPending}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-semibold">Dispositivos confiáveis</p>
+                <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular a etapa OTP.</p>
+              </div>
+              <Button variant="outline" onClick={() => trustCurrentDeviceMutation.mutate()} disabled={trustCurrentDeviceMutation.isPending}>
+                Confiar neste dispositivo
+              </Button>
+            </div>
+
+            {trustedDevices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum dispositivo confiável cadastrado.</p>
+            ) : (
+              trustedDevices.map((device) => (
+                <div key={device.id} className="rounded-md border p-3 flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <p className="font-medium">{device.device_label || "Dispositivo"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Último uso: {new Date(device.last_used_at).toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => revokeTrustedDeviceMutation.mutate(device.id)}
+                    disabled={revokeTrustedDeviceMutation.isPending}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={stepUpOpen} onOpenChange={setStepUpOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirma sua senha para continuar</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Essa ação é sensível. Confirme sua senha para liberar a alteração.</p>
+            <Input
+              type="password"
+              value={stepUpPassword}
+              onChange={(event) => setStepUpPassword(event.target.value)}
+              placeholder="Digite sua senha"
+              autoComplete="current-password"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setStepUpOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmStepUpAuth} disabled={stepUpLoading}>
+                {stepUpLoading ? "Validando..." : "Confirmar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 

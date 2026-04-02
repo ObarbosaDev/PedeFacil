@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -71,7 +71,7 @@ export default function Categories() {
   });
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro em "Minha Loja".</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja lá em "Minha Loja" primeiro.</p>;
   }
 
   return (
@@ -125,3 +125,5 @@ export default function Categories() {
     </div>
   );
 }
+
+

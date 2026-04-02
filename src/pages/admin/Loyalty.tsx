@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+﻿import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,7 @@ export default function Loyalty() {
   });
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro.</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja primeiro.</p>;
   }
 
   return (
@@ -70,3 +70,5 @@ export default function Loyalty() {
     </div>
   );
 }
+
+

@@ -1,0 +1,23 @@
+{
+  "name": "Pede Fácil Entregador",
+  "short_name": "PedeFácil",
+  "start_url": "/entregador",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Painel do entregador do Pede Fácil.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

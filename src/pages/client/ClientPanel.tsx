@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { formatPhone } from "@/lib/formatters";
-import { logAuditEvent } from "@/lib/observability";
+import StateCard from "@/components/system/StateCard";
+import { logAuditEvent, logClientError } from "@/lib/observability";
 import {
   Compass,
   Clock3,
@@ -97,7 +98,12 @@ export default function ClientPanel() {
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>(() => readJson<string[]>(STORAGE_KEYS.favorites, []));
   const [lastVisitedStore, setLastVisitedStore] = useState<LastVisitedStore | null>(() => readJson<LastVisitedStore | null>(STORAGE_KEYS.lastStore, null));
 
-  const { data: establishments = [], isLoading } = useQuery<Establishment[]>({
+  const {
+    data: establishments = [],
+    isLoading,
+    isError: isEstablishmentsError,
+    error: establishmentsError,
+  } = useQuery<Establishment[]>({
     queryKey: ["client-establishments"],
     queryFn: async () => {
       const { data } = await supabase
@@ -164,6 +170,17 @@ export default function ClientPanel() {
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!isEstablishmentsError || !establishmentsError) return;
+    void logClientError({
+      scope: "query",
+      message: "Falha ao carregar estabelecimentos no painel do cliente",
+      metadata: {
+        error: String(establishmentsError),
+      },
+    });
+  }, [establishmentsError, isEstablishmentsError]);
 
   const metrics = useMemo(() => {
     const total = establishments.length;
@@ -262,7 +279,7 @@ export default function ClientPanel() {
       if (user) queryClient.invalidateQueries({ queryKey: ["customer-favorites-panel", user.id] });
     },
     onError: () => {
-      toast.error("Não foi possível atualizar suas favoritas agora.");
+      toast.error("Não rolou atualizar suas favoritas agora.");
     },
   });
 
@@ -306,6 +323,22 @@ export default function ClientPanel() {
     await signOut();
   };
 
+  if (isEstablishmentsError) {
+    return (
+      <div className="min-h-screen bg-muted/30 p-4 md:p-8">
+        <div className="mx-auto max-w-3xl">
+          <StateCard
+            kind="error"
+            title="Não conseguimos carregar as lojas agora"
+            description="Pode ser instabilidade temporária. Tenta atualizar para continuar navegando."
+            actionLabel="Recarregar página"
+            action={() => window.location.reload()}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-muted/30">
       <a
@@ -317,9 +350,8 @@ export default function ClientPanel() {
       <div className="flex min-h-screen">
         <aside className="hidden lg:flex w-72 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
           <div className="p-6">
-            <Link to="/" className="flex items-center gap-1">
-              <span className="text-2xl font-extrabold text-sidebar-primary">Pede</span>
-              <span className="text-2xl font-extrabold">Fácil</span>
+            <Link to="/" className="flex items-center" aria-label="Voltar para a página inicial">
+              <img src="/logo.png" alt="Logo Pede Fácil" className="h-10 w-auto object-contain" />
             </Link>
             <p className="text-xs text-sidebar-foreground/60 mt-1">Seu cantinho de pedidos</p>
           </div>
@@ -718,3 +750,4 @@ export default function ClientPanel() {
     </div>
   );
 }
+

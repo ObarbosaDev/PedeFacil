@@ -1,16 +1,17 @@
 ﻿import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, BadgeCheck, Rocket, Store, Users } from "lucide-react";
+import { ArrowRight, BadgeCheck, Eye, EyeOff, Lock, Rocket, Store, Users } from "lucide-react";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
+import { trackProductEvent } from "@/lib/product-analytics";
 
 const registerSchema = z
   .object({
@@ -29,7 +30,11 @@ type RegisterForm = z.infer<typeof registerSchema>;
 export default function Register() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -41,155 +46,166 @@ export default function Register() {
       setLoading(true);
       await signUp(data.email, data.password, data.fullName.trim());
       toast.success("Conta criada! Verifique seu e-mail para confirmar.");
-      navigate("/login");
+      void trackProductEvent("funnel_account_created", { role: "store_owner" });
+      const next = searchParams.get("next");
+      const safeNext = next && next.startsWith("/") ? next : "/admin";
+      navigate(`/login?next=${encodeURIComponent(safeNext)}`);
     } catch (err: any) {
-      toast.error(err.message || "Não foi possível criar sua conta agora.");
+      toast.error(err.message || "Não rolou criar sua conta agora.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-24 right-0 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
-        <div className="absolute bottom-0 left-0 h-80 w-80 rounded-full bg-orange-300/20 blur-3xl" />
-      </div>
+    <AuthSplitLayout
+      leftEyebrow="Cadastro de lojista"
+      leftTitle="Coloque sua loja no jogo em poucos minutos."
+      leftDescription="Crie sua conta, configure seu cardápio e comece a receber pedidos com um painel pronto para escalar."
+      leftHighlights={[
+        { icon: Rocket, text: "Setup rápido, sem dor de cabeça." },
+        { icon: BadgeCheck, text: "Fluxo de operação já organizado desde o primeiro dia." },
+        { icon: Users, text: "Experiência de compra que incentiva recompra." },
+      ]}
+      formEyebrow="Cadastro de lojista"
+      formTitle="Criar minha conta"
+      formDescription="Crie a conta, faça o pagamento do plano e libere o painel."
+      formIcon={Store}
+      backTo="/"
+      backLabel="Voltar para início"
+      secondaryTo="/"
+      secondaryLabel="Ir para home"
+      leftTone="dark"
+      formTone="orange"
+      quickPoints={["Onboarding rápido", "Conta protegida", "Ativação por plano"]}
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="fullName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome completo</FormLabel>
+                <FormControl>
+                  <Input placeholder="Ex: João Silva" autoComplete="name" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <div className="min-h-screen grid lg:grid-cols-2 relative z-10">
-        <section className="hidden lg:flex p-10 xl:p-14">
-          <div className="w-full rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 text-zinc-50 p-10 flex flex-col justify-between">
-            <div>
-              <Link to="/" className="inline-flex items-center gap-1 mb-8">
-                <span className="text-3xl font-black text-primary">Pede</span>
-                <span className="text-3xl font-black">Fácil</span>
-              </Link>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>E-mail</FormLabel>
+                <FormControl>
+                  <Input type="email" placeholder="seunome@empresa.com" autoComplete="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <h1 className="text-4xl font-black leading-tight">Coloque sua loja no jogo em poucos minutos.</h1>
-              <p className="mt-4 text-lg text-zinc-300 max-w-md">
-                Crie sua conta, configure seu cardápio e comece a receber pedidos ainda hoje.
-              </p>
-            </div>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Senha</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Crie uma senha forte"
+                      autoComplete="new-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="pr-11"
+                      onKeyUp={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
+                      onBlur={() => setCapsLockOn(false)}
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                {capsLockOn ? (
+                  <p className="text-xs text-amber-700 inline-flex items-center gap-1">
+                    <Lock className="h-3.5 w-3.5" />
+                    Caps Lock ativado.
+                  </p>
+                ) : null}
+                <p className="text-xs text-zinc-300">{PASSWORD_RULE}</p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <div className="space-y-3">
-              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
-                <Rocket className="h-5 w-5 text-primary" />
-                <p>Setup rápido, sem dor de cabeça.</p>
-              </div>
-              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
-                <BadgeCheck className="h-5 w-5 text-emerald-400" />
-                <p>Painel pronto para o dia a dia da operação.</p>
-              </div>
-              <div className="rounded-xl bg-zinc-800 border border-zinc-700 p-4 flex items-center gap-3">
-                <Users className="h-5 w-5 text-orange-300" />
-                <p>Clientes pedindo com mais facilidade.</p>
-              </div>
-            </div>
-          </div>
-        </section>
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirmar senha</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Repita sua senha"
+                      autoComplete="new-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="pr-11"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <section className="flex items-center justify-center p-6 sm:p-8">
-          <Card className="w-full max-w-md border-primary/20 shadow-xl">
-            <CardContent className="p-6 sm:p-8">
-              <div className="mb-4">
-                <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4" />
-                  Voltar para início
-                </Link>
-              </div>
-              <div className="lg:hidden mb-6">
-                <Link to="/" className="inline-flex items-center gap-1">
-                  <span className="text-2xl font-black text-primary">Pede</span>
-                  <span className="text-2xl font-black">Fácil</span>
-                </Link>
-              </div>
+          <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={loading}>
+            {loading ? "Criando conta..." : "Criar conta grátis"}
+            {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
+          </Button>
+        </form>
+      </Form>
 
-              <div className="mb-6">
-                <p className="text-sm text-primary font-medium flex items-center gap-2">
-                  <Store className="h-4 w-4" />
-                  Cadastro de lojista
-                </p>
-                <h2 className="text-2xl font-black mt-1">Criar minha conta</h2>
-                <p className="text-muted-foreground mt-1">Sem cartão de crédito. É só criar e começar.</p>
-              </div>
-
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="fullName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome completo</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: João Silva" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>E-mail</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="seunome@empresa.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Senha</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Crie uma senha forte" {...field} />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">{PASSWORD_RULE}</p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirmar senha</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Repita sua senha" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button type="submit" className="w-full h-11" disabled={loading}>
-                    {loading ? "Criando conta..." : "Criar conta grátis"}
-                    {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
-                  </Button>
-                </form>
-              </Form>
-
-              <p className="text-center text-sm text-muted-foreground mt-6">
-                Já tem conta?{" "}
-                <Link to="/login" className="text-primary font-semibold hover:underline">
-                  Entrar agora
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
-        </section>
-      </div>
-    </div>
+      <p className="text-center text-sm text-zinc-300">
+        Já tem conta?{" "}
+        <Link
+          to={`/login${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
+          className="text-orange-400 font-semibold hover:text-orange-300 hover:underline"
+        >
+          Entrar agora
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 }
+
+
+
+
+
 

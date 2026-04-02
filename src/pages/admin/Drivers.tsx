@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -136,7 +136,7 @@ export default function Drivers() {
     enabled: !!establishment,
   });
 
-  const liveCountByDriver = activeDeliveries.reduce<Record<string, number>>((acc, row: any) => {
+  const liveCountByDriver = (activeDeliveries as any[]).reduce<Record<string, number>>((acc, row: any) => {
     acc[row.driver_id] = (acc[row.driver_id] || 0) + 1;
     return acc;
   }, {});
@@ -177,7 +177,7 @@ export default function Drivers() {
 
   const saveDriverMutation = useMutation({
     mutationFn: async () => {
-      if (!establishment?.id) throw new Error("Loja nao encontrada.");
+      if (!establishment?.id) throw new Error("Loja não encontrada.");
       if (!form.fullName.trim() || !form.email.trim() || !form.phone.trim()) {
         throw new Error("Preencha nome, e-mail e telefone.");
       }
@@ -200,7 +200,7 @@ export default function Drivers() {
       queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment?.id] });
       toast.success("Entregador cadastrado.");
     },
-    onError: (error: any) => toast.error(error.message || "Nao foi possivel cadastrar entregador."),
+    onError: (error: any) => toast.error(error.message || "Não rolou cadastrar entregador."),
   });
 
   const updateDriverMutation = useMutation({
@@ -212,11 +212,11 @@ export default function Drivers() {
       queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment?.id] });
       toast.success("Entregador atualizado.");
     },
-    onError: (error: any) => toast.error(error.message || "Nao foi possivel atualizar entregador."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar entregador."),
   });
 
   if (!establishment) {
-    return <p className="text-center py-10 text-muted-foreground">Configure sua loja para gerenciar entregadores.</p>;
+    return <p className="text-center py-10 text-muted-foreground">Configura sua loja para gerenciar entregadores.</p>;
   }
 
   const total = drivers.length;
@@ -250,20 +250,20 @@ export default function Drivers() {
       <Card>
         <CardHeader>
           <CardTitle>Fechamento do dia</CardTitle>
-          <CardDescription>Resumo do custo logistico de hoje, sem precisar fechar isso no improviso.</CardDescription>
+          <CardDescription>Resumo do custo logístico de hoje, sem planilha improvisada.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="rounded-xl border p-4">
-              <p className="text-xs text-muted-foreground">Saida total de hoje</p>
+              <p className="text-xs text-muted-foreground">Saída total de hoje</p>
               <p className="text-2xl font-bold">{formatCurrency(payoutToday)}</p>
             </div>
             <div className="rounded-xl border p-4">
-              <p className="text-xs text-muted-foreground">Corridas concluidas</p>
+              <p className="text-xs text-muted-foreground">Corridas concluídas</p>
               <p className="text-2xl font-bold">{deliveredCountToday}</p>
             </div>
             <div className="rounded-xl border p-4">
-              <p className="text-xs text-muted-foreground">Media por entrega</p>
+              <p className="text-xs text-muted-foreground">Média por entrega</p>
               <p className="text-2xl font-bold">{formatCurrency(averagePayoutToday)}</p>
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function Drivers() {
                           <p className="font-semibold">{formatCurrency(driverSummary.payout)}</p>
                         </div>
                         <div className="rounded-lg border p-3">
-                          <p className="text-xs text-muted-foreground">Media ETA</p>
+                          <p className="text-xs text-muted-foreground">Média ETA</p>
                           <p className="font-semibold">{driverSummary.deliveries > 0 ? `${averageEta} min` : "-"}</p>
                         </div>
                         <div className="rounded-lg border p-3">
@@ -315,7 +315,7 @@ export default function Drivers() {
         <Card>
           <CardHeader>
             <CardTitle>Fechamento semanal</CardTitle>
-            <CardDescription>Ultimos 7 dias de repasse e volume por entregador.</CardDescription>
+            <CardDescription>Últimos 7 dias de repasse e volume por entregador.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -348,7 +348,7 @@ export default function Drivers() {
         <Card>
           <CardHeader>
             <CardTitle>Fechamento mensal</CardTitle>
-            <CardDescription>Consolidado do mes para acompanhar custo logistico da operacao.</CardDescription>
+            <CardDescription>Consolidado do mês para acompanhar custo logístico da operação.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -398,7 +398,7 @@ export default function Drivers() {
             <Input value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} />
           </div>
           <div>
-            <Label>Veiculo</Label>
+            <Label>Veículo</Label>
             <Select value={form.vehicleType} onValueChange={(value) => setForm((prev) => ({ ...prev, vehicleType: value }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -413,7 +413,7 @@ export default function Drivers() {
             <Input value={form.licensePlate} onChange={(e) => setForm((prev) => ({ ...prev, licensePlate: e.target.value }))} placeholder="Opcional" />
           </div>
           <div>
-            <Label>Maximo de corridas simultaneas</Label>
+            <Label>Máximo de corridas simultâneas</Label>
             <Input type="number" min={1} value={form.maxActiveDeliveries} onChange={(e) => setForm((prev) => ({ ...prev, maxActiveDeliveries: e.target.value }))} />
           </div>
           <div>
@@ -431,12 +431,12 @@ export default function Drivers() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Visao da frota</CardTitle>
+          <CardTitle>Visão da frota</CardTitle>
           <CardDescription>Veja carga, disponibilidade e custo por corrida de cada entregador.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {drivers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ainda nao ha entregadores cadastrados.</p>
+            <p className="text-sm text-muted-foreground">Ainda não há entregadores cadastrados.</p>
           ) : (
             drivers.map((driver) => {
               const liveDeliveries = liveCountByDriver[driver.id] || 0;
@@ -475,7 +475,7 @@ export default function Drivers() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground">Capacidade</p>
-                      <p className="font-semibold">{driver.max_active_deliveries} simultanea(s)</p>
+                      <p className="font-semibold">{driver.max_active_deliveries} simultânea(s)</p>
                     </div>
                     <div className="rounded-lg border p-3">
                       <p className="text-xs text-muted-foreground">Custo por entrega</p>
@@ -546,17 +546,19 @@ export default function Drivers() {
         <CardContent className="p-4 text-sm text-muted-foreground">
           <p className="font-semibold text-foreground flex items-center gap-2 mb-1">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Como isso fica redondo na operacao
+            Como isso fica redondo na operação
           </p>
           <p>
-            Deixa o entregador online para receber corrida, define um limite de carga por pessoa e usa o valor por entrega para fechar custo logistico do dia sem planilha improvisada.
+            Deixa o entregador online para receber corrida, define um limite de carga por pessoa e usa o valor por entrega para fechar o custo logístico do dia sem planilha improvisada.
           </p>
           <p className="mt-2">
-            O ideal e manter o mesmo e-mail cadastrado aqui e na conta do entregador para o vinculo acontecer sem atrito.
+            O ideal é manter o mesmo e-mail cadastrado aqui e na conta do entregador para o vínculo acontecer sem atrito.
           </p>
         </CardContent>
       </Card>
     </div>
   );
 }
+
+
 

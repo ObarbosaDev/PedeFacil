@@ -11,6 +11,17 @@ node_modules
 dist
 dist-ssr
 *.local
+coverage
+.nyc_output
+
+# Java / Maven
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Test / Playwright artifacts
+playwright-report/
+test-results/
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +33,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.*
+*.secret
+
+# Supabase local artifacts / backups
+supabase/.temp/
+*.dump
+*.bak

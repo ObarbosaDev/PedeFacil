@@ -209,7 +209,7 @@ export default function Coupons() {
       toast.success(editing ? "Cupom atualizado com sucesso." : "Cupom criado com sucesso.");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Não foi possível salvar o cupom.");
+      toast.error(error.message || "Não rolou salvar o cupom.");
     },
   });
 
@@ -236,7 +236,7 @@ export default function Coupons() {
       toast.success("Cupom removido.");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Não foi possível remover o cupom.");
+      toast.error(error.message || "Não rolou remover o cupom.");
     },
   });
 
@@ -258,7 +258,7 @@ export default function Coupons() {
   };
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configure sua loja primeiro em "Minha Loja".</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja lá em "Minha Loja" primeiro.</p>;
   }
 
   return (
@@ -496,3 +496,4 @@ export default function Coupons() {
     </div>
   );
 }
+
