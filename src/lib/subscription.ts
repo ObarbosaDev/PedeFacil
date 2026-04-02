@@ -68,10 +68,18 @@ export async function confirmPlanPayment(input: {
   providerEventId?: string;
   providerName?: string;
 }): Promise<{ subscription_id: string; status: SubscriptionStatus; current_period_end: string | null }> {
-  const providerEventId = input.providerEventId || `evt_${crypto.randomUUID()}`;
+  const normalizedCheckoutSessionId = input.checkoutSessionId.trim();
+  if (!normalizedCheckoutSessionId) {
+    throw new Error("Sessao de checkout invalida.");
+  }
+
+  const sanitizedSessionId = normalizedCheckoutSessionId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 50);
+  const providerEventId =
+    input.providerEventId ||
+    `evt_checkout_${sanitizedSessionId || "fallback"}`;
 
   const { data, error } = await (supabase as any).rpc("confirm_plan_payment_webhook", {
-    p_checkout_session_id: input.checkoutSessionId,
+    p_checkout_session_id: normalizedCheckoutSessionId,
     p_provider_event_id: providerEventId,
     p_provider_name: input.providerName || "internal_demo",
     p_payload: {

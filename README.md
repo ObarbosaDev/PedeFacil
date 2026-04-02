@@ -185,8 +185,50 @@ Antes de homologar ou publicar, aplique todas as migrations do projeto no Supaba
 - `20260401120000_store_subscription_billing.sql`
 - `20260401133000_account_security_upgrade.sql`
 - `20260401170000_delivery_proof_hardening.sql`
+- `20260402110000_order_idempotency.sql`
+- `20260402123000_payment_webhook_idempotency_hardening.sql`
 
 Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
+
+### Como aplicar migrations (Supabase CLI)
+
+1. Instale a CLI (uma vez):
+
+```bash
+npm install -g supabase
+```
+
+2. Faça login:
+
+```bash
+supabase login
+```
+
+3. Linke o projeto (use o `VITE_SUPABASE_PROJECT_ID` do `.env`):
+
+```bash
+supabase link --project-ref SEU_PROJECT_ID
+```
+
+4. Aplique tudo que está pendente:
+
+```bash
+supabase db push
+```
+
+Se preferir sem instalar globalmente:
+
+```bash
+npx supabase db push
+```
+
+### Teste rápido pós-migration (5 minutos)
+
+1. Abrir uma loja e ir para checkout.
+2. Finalizar pedido clicando repetidamente no botão.
+3. Validar que foi gerado apenas 1 pedido (sem duplicidade).
+4. Repetir confirmação de pagamento do plano.
+5. Validar que não duplica evento de confirmação e o status da assinatura permanece consistente.
 
 ## Go-live em 5 Minutos
 
@@ -205,6 +247,19 @@ Critério de liberação recomendado:
 - Score >= 90%
 - Gates 100% em `PASS`
 - Conformidade de entrega >= 90%
+
+## Primeiros Clientes (Execução Rápida)
+
+Kit pronto para sair do zero até os primeiros lojistas pagantes:
+
+- Plano de 7 dias e operação prática:
+  - `docs/FIRST_CLIENT_LAUNCH_KIT.md`
+- Mensagens prontas de abordagem:
+  - `docs/templates/WHATSAPP_OUTREACH.txt`
+- Checklist de contingência diária:
+  - `docs/templates/OPERACAO_MVP_CHECKLIST.md`
+- Planilha mínima de métricas:
+  - `docs/templates/METRICS_TRACKER.csv`
 
 ## Scripts Úteis
 
