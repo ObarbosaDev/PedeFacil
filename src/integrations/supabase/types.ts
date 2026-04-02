@@ -208,141 +208,43 @@ export type Database = {
           },
         ]
       }
-      coupons: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          discount_type: Database["public"]["Enums"]["coupon_discount_type"]
-          discount_value: number
-          establishment_id: string
-          expires_at: string | null
-          id: string
-          is_active: boolean
-          max_discount_value: number | null
-          minimum_order_value: number
-          starts_at: string | null
-          updated_at: string
-          usage_count: number
-          usage_limit: number | null
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          discount_type: Database["public"]["Enums"]["coupon_discount_type"]
-          discount_value: number
-          establishment_id: string
-          expires_at?: string | null
-          id?: string
-          is_active?: boolean
-          max_discount_value?: number | null
-          minimum_order_value?: number
-          starts_at?: string | null
-          updated_at?: string
-          usage_count?: number
-          usage_limit?: number | null
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          discount_type?: Database["public"]["Enums"]["coupon_discount_type"]
-          discount_value?: number
-          establishment_id?: string
-          expires_at?: string | null
-          id?: string
-          is_active?: boolean
-          max_discount_value?: number | null
-          minimum_order_value?: number
-          starts_at?: string | null
-          updated_at?: string
-          usage_count?: number
-          usage_limit?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "coupons_establishment_id_fkey"
-            columns: ["establishment_id"]
-            isOneToOne: false
-            referencedRelation: "establishments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       orders: {
         Row: {
-          coupon_code: string | null
-          coupon_id: string | null
           created_at: string
           customer_id: string | null
           customer_name: string
           customer_phone: string
-          delivery_city: string | null
-          delivery_complement: string | null
-          delivery_neighborhood: string | null
-          delivery_number: string | null
-          delivery_reference: string | null
-          delivery_state: string | null
-          delivery_street: string | null
-          delivery_zip_code: string | null
-          discount_amount: number
           establishment_id: string
           id: string
           observation: string | null
           order_type: Database["public"]["Enums"]["order_type"]
           status: Database["public"]["Enums"]["order_status"]
-          subtotal: number
           total: number
           updated_at: string
         }
         Insert: {
-          coupon_code?: string | null
-          coupon_id?: string | null
           created_at?: string
           customer_id?: string | null
           customer_name: string
           customer_phone: string
-          delivery_city?: string | null
-          delivery_complement?: string | null
-          delivery_neighborhood?: string | null
-          delivery_number?: string | null
-          delivery_reference?: string | null
-          delivery_state?: string | null
-          delivery_street?: string | null
-          delivery_zip_code?: string | null
-          discount_amount?: number
           establishment_id: string
           id?: string
           observation?: string | null
           order_type?: Database["public"]["Enums"]["order_type"]
           status?: Database["public"]["Enums"]["order_status"]
-          subtotal?: number
           total?: number
           updated_at?: string
         }
         Update: {
-          coupon_code?: string | null
-          coupon_id?: string | null
           created_at?: string
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string
-          delivery_city?: string | null
-          delivery_complement?: string | null
-          delivery_neighborhood?: string | null
-          delivery_number?: string | null
-          delivery_reference?: string | null
-          delivery_state?: string | null
-          delivery_street?: string | null
-          delivery_zip_code?: string | null
-          discount_amount?: number
           establishment_id?: string
           id?: string
           observation?: string | null
           order_type?: Database["public"]["Enums"]["order_type"]
           status?: Database["public"]["Enums"]["order_status"]
-          subtotal?: number
           total?: number
           updated_at?: string
         }
@@ -352,13 +254,6 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_coupon_id_fkey"
-            columns: ["coupon_id"]
-            isOneToOne: false
-            referencedRelation: "coupons"
             referencedColumns: ["id"]
           },
           {
@@ -490,7 +385,6 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "store_owner" | "attendant"
-      coupon_discount_type: "percentage" | "fixed"
       order_status:
         | "received"
         | "confirmed"
@@ -627,7 +521,6 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "store_owner", "attendant"],
-      coupon_discount_type: ["percentage", "fixed"],
       order_status: [
         "received",
         "confirmed",
