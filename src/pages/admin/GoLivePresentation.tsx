@@ -95,7 +95,7 @@ export default function GoLivePresentation() {
 
   const status = score >= 90 ? "green" : score >= 70 ? "yellow" : "red";
 
-  const statusLabel = status === "green" ? "Pronto para liberar" : status === "yellow" ? "Quase pronto" : "Nao pronto";
+  const statusLabel = status === "green" ? "Pronto para liberar" : status === "yellow" ? "Quase pronto" : "Não pronto";
 
   const latest = (deliveries as any[]).slice(0, 3);
 
@@ -137,7 +137,7 @@ export default function GoLivePresentation() {
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Apresentacao executiva</p>
           <h1 className="text-3xl font-black">Status de prontidao para cliente</h1>
-          <p className="text-muted-foreground mt-1">{establishment?.name || "Sua operacao"}</p>
+          <p className="text-muted-foreground mt-1">{establishment?.name || "Sua operação"}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void toggleFullscreen()}>
@@ -157,7 +157,7 @@ export default function GoLivePresentation() {
       <Card className={status === "green" ? "border-emerald-500/40 bg-emerald-500/10" : status === "yellow" ? "border-amber-500/40 bg-amber-500/10" : "border-destructive/40 bg-destructive/10"}>
         <CardContent className="p-6 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Semaforo de liberacao</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Semáforo de liberação</p>
             <p className="text-3xl font-black mt-1">{statusLabel}</p>
             <p className="text-sm text-muted-foreground mt-1">Score consolidado: {score}%</p>
           </div>
@@ -172,7 +172,7 @@ export default function GoLivePresentation() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Checklist</p><p className="text-2xl font-bold">{checklistDone}/{checklistTotal}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Aceitacao</p><p className="text-2xl font-bold">{acceptanceDone}/{acceptanceTotal}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Aceitação</p><p className="text-2xl font-bold">{acceptanceDone}/{acceptanceTotal}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Conformidade entrega</p><p className="text-2xl font-bold">{audit.rate}%</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Ultima atualizacao</p><p className="text-sm font-semibold">{formatDate(new Date().toISOString())}</p></CardContent></Card>
       </div>
@@ -180,11 +180,11 @@ export default function GoLivePresentation() {
       <Card>
         <CardHeader>
           <CardTitle>Evidencias recentes</CardTitle>
-          <CardDescription>Ultimas entregas concluidas com dados de conformidade.</CardDescription>
+          <CardDescription>Últimas entregas concluídas com dados de conformidade.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {latest.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem entregas concluidas para exibir.</p>
+            <p className="text-sm text-muted-foreground">Sem entregas concluídas para exibir.</p>
           ) : (
             latest.map((row: any) => {
               const compliant = !!row.proof_image_url

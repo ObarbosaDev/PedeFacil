@@ -4,6 +4,11 @@
       "name": "automation",
       "type": "com.pedefacil.automation.AutomationProperties",
       "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "payments",
+      "type": "com.pedefacil.automation.payment.PaymentsProperties",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
     }
   ],
   "properties": [
@@ -62,6 +67,42 @@
       "name": "automation.zapi-token",
       "type": "java.lang.String",
       "sourceType": "com.pedefacil.automation.AutomationProperties"
+    },
+    {
+      "name": "payments.allowed-origins",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.api-public-base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.mercadopago-access-token",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.mercadopago-api-base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": "https:\/\/api.mercadopago.com"
+    },
+    {
+      "name": "payments.mercadopago-webhook-token",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.supabase-service-role-key",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.supabase-url",
+      "type": "java.lang.String",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
     }
   ],
   "hints": []

@@ -102,7 +102,7 @@ export default function Register() {
               <FormItem>
                 <FormLabel>E-mail</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="seunome@empresa.com" autoComplete="email" {...field} />
+                  <Input type="email" placeholder="seuemail@empresa.com" autoComplete="email" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -184,18 +184,23 @@ export default function Register() {
             )}
           />
 
-          <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            aria-busy={loading}
+          >
             {loading ? "Criando conta..." : "Criar conta grátis"}
             {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
           </Button>
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-300">
+      <p className="text-center text-sm text-zinc-300 leading-relaxed">
         Já tem conta?{" "}
         <Link
           to={`/login${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
-          className="text-orange-400 font-semibold hover:text-orange-300 hover:underline"
+          className="text-zinc-100 font-semibold hover:text-white hover:underline"
         >
           Entrar agora
         </Link>

@@ -1,4 +1,4 @@
-﻿BEGIN;
+BEGIN;
 
 ALTER TABLE public.orders
   ADD COLUMN IF NOT EXISTS idempotency_key TEXT;

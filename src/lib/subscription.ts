@@ -1,4 +1,5 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
+import { env } from "@/lib/env";
 
 export type BillingCycle = "monthly" | "yearly";
 export type CheckoutPaymentMethod = "pix" | "card";
@@ -31,6 +32,14 @@ export type CheckoutSession = {
   payment_expires_at: string | null;
 };
 
+export type ExternalCheckoutSession = {
+  provider: "mercado_pago" | string;
+  already_active: boolean;
+  checkout_url: string | null;
+  preference_id: string | null;
+  checkout_session_id: string;
+};
+
 export async function getMyStoreSubscription(): Promise<StoreSubscription | null> {
   const { data, error } = await (supabase as any).rpc("get_my_store_subscription");
   if (error) throw error;
@@ -49,7 +58,7 @@ export async function startPlanCheckout(input: {
   billingCycle: BillingCycle;
   paymentMethod: CheckoutPaymentMethod;
 }): Promise<CheckoutSession> {
-  const { data, error } = await (supabase as any).rpc("start_plan_checkout", {
+  const { data, error } = await (supabase as any).rpc("start_plan_checkout_v2", {
     p_plan_slug: input.planSlug,
     p_billing_cycle: input.billingCycle,
     p_payment_method: input.paymentMethod,
@@ -63,35 +72,76 @@ export async function startPlanCheckout(input: {
   return data[0] as CheckoutSession;
 }
 
-export async function confirmPlanPayment(input: {
+export async function createExternalPlanCheckout(input: {
   checkoutSessionId: string;
-  providerEventId?: string;
-  providerName?: string;
-}): Promise<{ subscription_id: string; status: SubscriptionStatus; current_period_end: string | null }> {
-  const normalizedCheckoutSessionId = input.checkoutSessionId.trim();
-  if (!normalizedCheckoutSessionId) {
-    throw new Error("Sessao de checkout invalida.");
-  }
-
-  const sanitizedSessionId = normalizedCheckoutSessionId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 50);
-  const providerEventId =
-    input.providerEventId ||
-    `evt_checkout_${sanitizedSessionId || "fallback"}`;
-
-  const { data, error } = await (supabase as any).rpc("confirm_plan_payment_webhook", {
-    p_checkout_session_id: normalizedCheckoutSessionId,
-    p_provider_event_id: providerEventId,
-    p_provider_name: input.providerName || "internal_demo",
-    p_payload: {
-      source: "frontend_simulation",
-      created_at: new Date().toISOString(),
+  successUrl: string;
+  pendingUrl: string;
+  failureUrl: string;
+}): Promise<ExternalCheckoutSession> {
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const response = await fetch(`${apiBase}/api/payments/plan/checkout`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      checkoutSessionId: input.checkoutSessionId,
+      successUrl: input.successUrl,
+      pendingUrl: input.pendingUrl,
+      failureUrl: input.failureUrl,
+    }),
   });
 
-  if (error) throw error;
-  if (!Array.isArray(data) || data.length === 0) {
-    throw new Error("Não foi possível confirmar o pagamento.");
+  const rawText = await response.text();
+  let payload: any = {};
+  try {
+    payload = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    payload = { raw: rawText };
   }
 
-  return data[0] as { subscription_id: string; status: SubscriptionStatus; current_period_end: string | null };
+  if (!response.ok) {
+    const fallback =
+      typeof payload?.raw === "string" && payload.raw.trim()
+        ? payload.raw.slice(0, 220)
+        : "Não foi possível iniciar o pagamento agora.";
+    throw new Error(payload?.message || fallback);
+  }
+
+  return payload as ExternalCheckoutSession;
+}
+
+export async function revalidateExternalPlanPayment(input: {
+  checkoutSessionId: string;
+  paymentId?: string;
+}): Promise<{ status: string; payment_status?: string; revalidated: boolean }> {
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const response = await fetch(`${apiBase}/api/payments/plan/revalidate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      checkoutSessionId: input.checkoutSessionId,
+      paymentId: input.paymentId || null,
+    }),
+  });
+
+  const rawText = await response.text();
+  let payload: any = {};
+  try {
+    payload = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    payload = { raw: rawText };
+  }
+
+  if (!response.ok) {
+    const fallback =
+      typeof payload?.raw === "string" && payload.raw.trim()
+        ? payload.raw.slice(0, 220)
+        : "Não foi possível revalidar o pagamento agora.";
+    throw new Error(payload?.message || fallback);
+  }
+
+  return payload as { status: string; payment_status?: string; revalidated: boolean };
 }

@@ -1,5 +1,10 @@
 C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\AutomationProperties.java
+C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\payment\PaymentsProperties.java
+C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\payment\PlanPaymentsController.java
 C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\AutomationReceiverApplication.java
 C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\OutboundService.java
 C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\AutomationController.java
+C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\payment\SupabaseAdminClient.java
+C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\payment\MercadoPagoClient.java
+C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\payment\PaymentsWebConfig.java
 C:\Users\Matheus Barbosa\Documents\GitHub\pedefacilteste\backend\src\main\java\com\pedefacil\automation\SignatureService.java

@@ -143,19 +143,20 @@ export default function Dashboard() {
     isError: isProductEventsError,
     error: productEventsError,
   } = useQuery({
-    queryKey: ["dashboard-product-events", periodStartIso],
+    queryKey: ["dashboard-product-events", establishment?.id, periodStartIso],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("audit_logs")
         .select("action, metadata, created_at")
         .eq("entity_type", "product_event")
+        .contains("metadata", { establishmentId: establishment!.id })
         .gte("created_at", periodStartIso)
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(1500);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && !!establishment?.id,
   });
 
   useEffect(() => {

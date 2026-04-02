@@ -47,7 +47,7 @@ SET accepted_deadline_at = COALESCE(accepted_deadline_at, assigned_at + interval
 WHERE accepted_deadline_at IS NULL;
 
 UPDATE public.order_deliveries
-SET tracking_token = COALESCE(tracking_token, encode(gen_random_bytes(8), 'hex'))
+SET tracking_token = COALESCE(tracking_token, substring(replace(gen_random_uuid()::text, '-', '') from 1 for 16))
 WHERE tracking_token IS NULL;
 
 UPDATE public.order_deliveries

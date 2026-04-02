@@ -133,3 +133,68 @@
     animation: none;
   }
 }
+
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-fade-right {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.auth-stage {
+  animation: auth-fade-up 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-left-panel {
+  animation: auth-fade-right 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-form-card {
+  animation: auth-fade-up 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-highlight {
+  transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease;
+}
+
+.auth-highlight:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.auth-input-shell {
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+.auth-input-shell:focus-within {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-stage,
+  .auth-left-panel,
+  .auth-form-card {
+    animation: none;
+  }
+
+  .auth-highlight,
+  .auth-input-shell {
+    transition: none;
+  }
+}

@@ -1,4 +1,4 @@
-﻿-- Platform hardening: audit trail and customer order history
+-- Platform hardening: audit trail and customer order history
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,

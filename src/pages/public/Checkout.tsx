@@ -28,6 +28,8 @@ const checkoutSchema = z
     customerName: z.string().min(2, "Digite pelo menos 2 caracteres."),
     customerPhone: z.string().min(10, "Informe um telefone válido."),
     orderType: z.enum(["pickup", "delivery"]),
+    fulfillmentMode: z.enum(["asap", "scheduled"]),
+    scheduledFor: z.string().optional(),
     paymentMethod: z.enum(["pix", "credit_card", "debit_card", "cash"]),
     observation: z.string().max(500).optional(),
     deliveryStreet: z.string().optional(),
@@ -40,6 +42,32 @@ const checkoutSchema = z
     deliveryReference: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.fulfillmentMode === "scheduled") {
+      const raw = String(data.scheduledFor || "").trim();
+      if (!raw) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["scheduledFor"],
+          message: "Escolha um horário para agendar.",
+        });
+      } else {
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["scheduledFor"],
+            message: "Horário agendado inválido.",
+          });
+        } else if (parsed.getTime() < Date.now() + 15 * 60 * 1000) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["scheduledFor"],
+            message: "Agende com pelo menos 15 minutos de antecedência.",
+          });
+        }
+      }
+    }
+
     if (data.orderType !== "delivery") return;
 
     const requiredFields: Array<{ key: keyof typeof data; label: string }> = [
@@ -86,6 +114,8 @@ type StoredOrderIdempotencyContext = {
   createdAt: string;
 };
 
+type DeliveryRuleStatus = "ok" | "zip_missing" | "out_of_area" | "min_order";
+
 function calculateDiscount(subtotal: number, coupon: {
   discountType: DiscountType;
   discountValue: number;
@@ -111,6 +141,7 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryFeeMessage, setDeliveryFeeMessage] = useState<string>("");
+  const [deliveryRuleStatus, setDeliveryRuleStatus] = useState<DeliveryRuleStatus>("zip_missing");
   const serviceFee = 0;
   const draftStorageKey = `pedefacil.checkout.draft.${slug || "default"}`;
   const orderIdempotencyStorageKey = `${draftStorageKey}.idempotency`;
@@ -156,6 +187,8 @@ export default function Checkout() {
       customerName: "",
       customerPhone: "",
       orderType: "pickup",
+      fulfillmentMode: "asap",
+      scheduledFor: "",
       paymentMethod: "pix",
       observation: "",
       deliveryStreet: "",
@@ -171,6 +204,7 @@ export default function Checkout() {
 
   const watchedValues = useWatch({ control: form.control });
   const orderType = form.watch("orderType");
+  const fulfillmentMode = form.watch("fulfillmentMode");
 
   useEffect(() => {
     if (!slug) return;
@@ -232,9 +266,26 @@ export default function Checkout() {
       raw.includes("networkerror") ||
       raw.includes("fetch")
     ) {
-      return "Conexao oscilou. Pode tentar de novo: se o pedido ja tiver sido criado, a gente recupera sem duplicar.";
+      return "Conexão oscilou. Pode tentar de novo: se o pedido já tiver sido criado, a gente recupera sem duplicar.";
     }
-    return error?.message || "Nao rolou enviar o pedido.";
+    return error?.message || "Não rolou enviar o pedido.";
+  };
+
+  const enforceActionRateLimit = async (actionKey: string, maxHits: number, windowSeconds: number) => {
+    if (!user?.id) return;
+    const { data, error } = await (supabase as any).rpc("enforce_rate_limit", {
+      p_action_key: actionKey,
+      p_subject_key: user.id,
+      p_max_hits: maxHits,
+      p_window_seconds: windowSeconds,
+    });
+    if (error) throw error;
+
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row && row.allowed === false) {
+      const retry = Number(row.retry_after_seconds || 0);
+      throw new Error(`Você tentou rápido demais. Aguarde ${retry}s e tente novamente.`);
+    }
   };
 
   useEffect(() => {
@@ -354,6 +405,7 @@ export default function Checkout() {
     if (orderType !== "delivery") {
       setDeliveryFee(0);
       setDeliveryFeeMessage("");
+      setDeliveryRuleStatus("ok");
       return;
     }
 
@@ -361,6 +413,7 @@ export default function Checkout() {
     if (zip.length < 5) {
       setDeliveryFee(0);
       setDeliveryFeeMessage("Informe o CEP para calcular a taxa de entrega.");
+      setDeliveryRuleStatus("zip_missing");
       return;
     }
 
@@ -371,6 +424,7 @@ export default function Checkout() {
     if (!zone) {
       setDeliveryFee(0);
       setDeliveryFeeMessage("Ainda não entregamos nessa região.");
+      setDeliveryRuleStatus("out_of_area");
       return;
     }
 
@@ -378,6 +432,7 @@ export default function Checkout() {
     if (total < minOrderValue) {
       setDeliveryFee(Number(zone.fee || 0));
       setDeliveryFeeMessage(`Pedido mínimo para ${zone.name}: ${formatCurrency(minOrderValue)}.`);
+      setDeliveryRuleStatus("min_order");
       return;
     }
 
@@ -385,11 +440,13 @@ export default function Checkout() {
     if (freeOverValue != null && total >= freeOverValue) {
       setDeliveryFee(0);
       setDeliveryFeeMessage(`Frete grátis para ${zone.name} em pedidos acima de ${formatCurrency(freeOverValue)}.`);
+      setDeliveryRuleStatus("ok");
       return;
     }
 
     setDeliveryFee(Number(zone.fee || 0));
     setDeliveryFeeMessage(`Taxa de entrega para ${zone.name}.`);
+    setDeliveryRuleStatus("ok");
   }, [deliveryZones, form, orderType, total]);
 
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
@@ -419,6 +476,7 @@ export default function Checkout() {
       .slice(0, 4);
   }, [items, storeProducts]);
   const values = form.watch();
+  const formErrors = form.formState.errors;
   const requiredBaseFields = ["customerName", "customerPhone"] as const;
   const requiredDeliveryFields = ["deliveryStreet", "deliveryNumber", "deliveryNeighborhood", "deliveryCity", "deliveryState", "deliveryZipCode"] as const;
   const totalRequiredFields = requiredBaseFields.length + (orderType === "delivery" ? requiredDeliveryFields.length : 0);
@@ -434,6 +492,7 @@ export default function Checkout() {
     mutationFn: async () => {
       if (!establishment) throw new Error("Loja não encontrada.");
       const traceId = createTraceId();
+      await enforceActionRateLimit("checkout_apply_coupon", 10, 300);
 
       const normalizedCode = couponCode.trim().toUpperCase();
       if (!normalizedCode) throw new Error("Digite um código de cupom.");
@@ -516,11 +575,12 @@ export default function Checkout() {
   const orderMutation = useMutation({
     mutationFn: async (data: CheckoutForm) => {
       if (orderSubmitLockRef.current) {
-        throw new Error("Seu pedido ja esta sendo enviado. Aguarde alguns segundos.");
+        throw new Error("Seu pedido já está sendo enviado. Aguarde alguns segundos.");
       }
       orderSubmitLockRef.current = true;
 
       try {
+      await enforceActionRateLimit("checkout_submit_order", 5, 120);
       const traceId = createTraceId();
       if (!user) throw new Error("Faça login para finalizar o pedido.");
 
@@ -559,9 +619,36 @@ export default function Checkout() {
       }
 
       const isDelivery = data.orderType === "delivery";
+      const isScheduledOrder = data.fulfillmentMode === "scheduled";
+      const establishmentOps = establishment as any;
+      const isStorePausedNow = Boolean(
+        establishmentOps?.busy_mode_enabled &&
+        establishmentOps?.busy_pause_until &&
+        new Date(establishmentOps.busy_pause_until).getTime() > Date.now()
+      );
 
-      if (isDelivery && deliveryFeeMessage === "Ainda não entregamos nessa região.") {
-        throw new Error("A loja ainda não entrega nessa região.");
+      if (isStorePausedNow && !isScheduledOrder) {
+        const resumeAt = establishmentOps?.busy_pause_until
+          ? new Date(establishmentOps.busy_pause_until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+          : null;
+        throw new Error(
+          resumeAt
+            ? `Loja lotada agora. Novos pedidos imediatos voltam às ${resumeAt}.`
+            : "Loja lotada agora. Tente novamente em instantes."
+        );
+      }
+
+      if (isScheduledOrder && establishmentOps?.accepts_scheduled_orders === false) {
+        throw new Error("Esta loja está com agendamento desativado no momento.");
+      }
+
+      if (isDelivery) {
+        if (deliveryRuleStatus === "out_of_area") {
+          throw new Error("A loja ainda não entrega nessa região.");
+        }
+        if (deliveryRuleStatus === "min_order") {
+          throw new Error(deliveryFeeMessage);
+        }
       }
 
       if (isDelivery) {
@@ -591,6 +678,8 @@ export default function Checkout() {
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
         order_type: data.orderType,
+        is_scheduled: isScheduledOrder,
+        scheduled_for: isScheduledOrder ? new Date(String(data.scheduledFor || "")).toISOString() : null,
         observation: data.observation || null,
         payment_method: data.paymentMethod,
         payment_status: "pending",
@@ -622,6 +711,8 @@ export default function Checkout() {
         establishmentId: establishment!.id,
         userId: user.id,
         orderType: data.orderType,
+        fulfillmentMode: data.fulfillmentMode,
+        scheduledFor: isScheduledOrder ? data.scheduledFor : null,
         paymentMethod: data.paymentMethod,
         total: finalTotal,
         items: items.map((item) => ({ id: item.id, q: item.quantity, p: Number(item.price || 0) })),
@@ -761,6 +852,17 @@ export default function Checkout() {
     onError: (err: any) => toast.error(getFriendlyCheckoutError(err)),
   });
 
+  const deliveryUnavailable = orderType === "delivery" && deliveryRuleStatus === "out_of_area";
+  const deliveryMinimumNotReached = orderType === "delivery" && deliveryRuleStatus === "min_order";
+  const storePausedNow = Boolean(
+    fulfillmentMode !== "scheduled" &&
+    (establishment as any)?.busy_mode_enabled &&
+    (establishment as any)?.busy_pause_until &&
+    new Date((establishment as any).busy_pause_until).getTime() > Date.now()
+  );
+  const isSubmittingOrder = orderMutation.isPending || orderSubmitLockRef.current;
+  const canSubmitOrder = !isSubmittingOrder && !deliveryUnavailable && !deliveryMinimumNotReached && !storePausedNow;
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
@@ -825,7 +927,7 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 py-8 pb-28 md:pb-8 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button variant="ghost" onClick={() => navigate(`/loja/${slug}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />Voltar ao cardápio
@@ -871,6 +973,24 @@ export default function Checkout() {
             <p className="text-xs text-muted-foreground">
               Preencha os campos principais para agilizar o envio sem retrabalho.
             </p>
+          </div>
+
+          <div className="rounded-xl border bg-muted/30 p-4 mt-4">
+            <p className="text-sm font-semibold mb-3">Depois de enviar, funciona assim:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="rounded-lg border bg-background p-2">
+                <p className="font-semibold">1. Pedido recebido</p>
+                <p className="text-muted-foreground mt-1">A loja recebe seu pedido na hora.</p>
+              </div>
+              <div className="rounded-lg border bg-background p-2">
+                <p className="font-semibold">2. Preparação</p>
+                <p className="text-muted-foreground mt-1">A equipe confirma e começa a preparar.</p>
+              </div>
+              <div className="rounded-lg border bg-background p-2">
+                <p className="font-semibold">3. Entrega/retirada</p>
+                <p className="text-muted-foreground mt-1">Você acompanha e finaliza sem dor de cabeça.</p>
+              </div>
+            </div>
           </div>
           <p className="sr-only" aria-live="polite">
             {orderType === "delivery" && deliveryFeeMessage
@@ -993,7 +1113,7 @@ export default function Checkout() {
               {orderType === "delivery" && deliveryFeeMessage && (
                 <div
                   className={`rounded-md border p-2 text-xs ${
-                    deliveryFeeMessage === "Ainda não entregamos nessa região."
+                    deliveryRuleStatus === "out_of_area" || deliveryRuleStatus === "min_order"
                       ? "border-destructive/40 bg-destructive/5 text-destructive"
                       : "border-primary/30 bg-primary/5 text-foreground"
                   }`}
@@ -1019,6 +1139,7 @@ export default function Checkout() {
             <CardContent>
               <Form {...form}>
                 <form
+                  id="checkout-main-form"
                   onSubmit={form.handleSubmit((d) => {
                     if (orderMutation.isPending || orderSubmitLockRef.current) return;
                     orderMutation.mutate(d);
@@ -1060,6 +1181,35 @@ export default function Checkout() {
                     </FormItem>
                   )} />
 
+                  <FormField control={form.control} name="fulfillmentMode" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quando preparar?</FormLabel>
+                      <FormControl>
+                        <RadioGroup value={field.value} onValueChange={field.onChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Label htmlFor="asap" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="asap" id="asap" />
+                            O quanto antes
+                          </Label>
+                          <Label htmlFor="scheduled" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                            <RadioGroupItem value="scheduled" id="scheduled" />
+                            Quero agendar
+                          </Label>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  {fulfillmentMode === "scheduled" && (
+                    <FormField control={form.control} name="scheduledFor" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Horário agendado</FormLabel>
+                        <FormControl><Input type="datetime-local" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  )}
+
                   <FormField control={form.control} name="paymentMethod" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Forma de pagamento</FormLabel>
@@ -1096,7 +1246,7 @@ export default function Checkout() {
                           <FormField control={form.control} name="deliveryStreet" render={({ field }) => (
                             <FormItem>
                               <FormLabel>Rua</FormLabel>
-                              <FormControl><Input placeholder="Rua das Flores" {...field} /></FormControl>
+                              <FormControl><Input placeholder="Rua das Flores" className={formErrors.deliveryStreet ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -1104,7 +1254,7 @@ export default function Checkout() {
                         <FormField control={form.control} name="deliveryNumber" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Número</FormLabel>
-                            <FormControl><Input placeholder="123" {...field} /></FormControl>
+                            <FormControl><Input placeholder="123" className={formErrors.deliveryNumber ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -1114,14 +1264,14 @@ export default function Checkout() {
                         <FormField control={form.control} name="deliveryNeighborhood" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Bairro</FormLabel>
-                            <FormControl><Input placeholder="Centro" {...field} /></FormControl>
+                            <FormControl><Input placeholder="Centro" className={formErrors.deliveryNeighborhood ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="deliveryZipCode" render={({ field }) => (
                           <FormItem>
                             <FormLabel>CEP</FormLabel>
-                            <FormControl><Input placeholder="00000-000" {...field} /></FormControl>
+                            <FormControl><Input placeholder="00000-000" className={formErrors.deliveryZipCode ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -1132,7 +1282,7 @@ export default function Checkout() {
                           <FormField control={form.control} name="deliveryCity" render={({ field }) => (
                             <FormItem>
                               <FormLabel>Cidade</FormLabel>
-                              <FormControl><Input placeholder="São Paulo" {...field} /></FormControl>
+                              <FormControl><Input placeholder="São Paulo" className={formErrors.deliveryCity ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -1140,7 +1290,7 @@ export default function Checkout() {
                         <FormField control={form.control} name="deliveryState" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Estado</FormLabel>
-                            <FormControl><Input placeholder="SP" maxLength={2} {...field} /></FormControl>
+                            <FormControl><Input placeholder="SP" maxLength={2} className={formErrors.deliveryState ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -1175,19 +1325,41 @@ export default function Checkout() {
                   <Button
                     type="submit"
                     className="w-full h-12 text-base"
-                    disabled={orderMutation.isPending || (orderType === "delivery" && deliveryFeeMessage === "Ainda não entregamos nessa região.")}
+                    disabled={!canSubmitOrder}
                   >
-                    {orderMutation.isPending ? "Enviando pedido..." : "Enviar pedido no WhatsApp"}
+                    {isSubmittingOrder ? "Enviando pedido..." : "Enviar pedido no WhatsApp"}
                   </Button>
-                  {orderType === "delivery" && deliveryFeeMessage === "Ainda não entregamos nessa região." && (
+                  {deliveryUnavailable && (
                     <p className="text-xs text-destructive" role="status">
                       Esse CEP está fora da área de entrega desta loja.
+                    </p>
+                  )}
+                  {storePausedNow && (
+                    <p className="text-xs text-destructive" role="status">
+                      Loja lotada agora. Você pode agendar o pedido para mais tarde.
                     </p>
                   )}
                 </form>
               </Form>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur p-3 md:hidden">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground">Total do pedido</p>
+            <p className="font-semibold truncate">{formatCurrency(finalTotal)}</p>
+          </div>
+          <Button
+            type="submit"
+            form="checkout-main-form"
+            className="ml-auto"
+            disabled={!canSubmitOrder}
+          >
+            {isSubmittingOrder ? "Enviando..." : "Finalizar pedido"}
+          </Button>
         </div>
       </div>
     </div>

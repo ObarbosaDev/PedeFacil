@@ -19,6 +19,9 @@ import {
   LogOut,
   ShieldCheck,
   Target,
+  Siren,
+  Medal,
+  ReceiptText,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -40,6 +43,9 @@ const navItems: { label: string; icon: any; path: string; feature: PlanFeature }
   { label: "Seções", icon: FolderOpen, path: "/admin/categorias", feature: "categories" },
   { label: "Cupons", icon: TicketPercent, path: "/admin/cupons", feature: "coupons" },
   { label: "Entregadores", icon: Bike, path: "/admin/entregadores", feature: "drivers" },
+  { label: "Ranking motoboy", icon: Medal, path: "/admin/entregadores/ranking", feature: "drivers" },
+  { label: "Incidentes", icon: Siren, path: "/admin/incidentes", feature: "dashboard" },
+  { label: "Ledger pagamentos", icon: ReceiptText, path: "/admin/pagamentos/ledger", feature: "dashboard" },
   { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes", feature: "automations" },
   { label: "Go-live", icon: ShieldCheck, path: "/admin/go-live", feature: "dashboard" },
   { label: "Roadmap 30/60/90", icon: Target, path: "/admin/roadmap", feature: "dashboard" },

@@ -24,7 +24,7 @@ import {
 import { hasRecentStepUp, markStepUpVerified } from "@/lib/step-up";
 
 export default function StoreSettings() {
-  const { user, confirmPassword } = useAuth();
+  const { user, confirmPassword, signOutAllSessions } = useAuth();
   const queryClient = useQueryClient();
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [stepUpOpen, setStepUpOpen] = useState(false);
@@ -103,6 +103,12 @@ export default function StoreSettings() {
     inPreparationMinutes: "25",
     readyMinutes: "10",
   });
+  const [busyForm, setBusyForm] = useState({
+    busyModeEnabled: false,
+    busyPauseMinutes: "30",
+    busyMessage: "Loja lotada agora. Novos pedidos em breve.",
+    acceptsScheduledOrders: true,
+  });
 
   const [initialized, setInitialized] = useState(false);
   if (establishment && !initialized) {
@@ -115,6 +121,12 @@ export default function StoreSettings() {
       logo_url: establishment.logo_url || "",
     });
     setInitialized(true);
+    setBusyForm({
+      busyModeEnabled: !!(establishment as any).busy_mode_enabled,
+      busyPauseMinutes: "30",
+      busyMessage: (establishment as any).busy_message || "Loja lotada agora. Novos pedidos em breve.",
+      acceptsScheduledOrders: (establishment as any).accepts_scheduled_orders !== false,
+    });
   }
 
   useEffect(() => {
@@ -267,6 +279,32 @@ export default function StoreSettings() {
     onError: (err: any) => toast.error(err.message || "Não rolou salvar o SLA."),
   });
 
+  const saveBusyModeMutation = useMutation({
+    mutationFn: async () => {
+      if (!establishment) throw new Error("Crie sua loja primeiro.");
+      const pauseMinutes = Math.max(5, Number(busyForm.busyPauseMinutes || 30));
+      const pauseUntil = busyForm.busyModeEnabled
+        ? new Date(Date.now() + pauseMinutes * 60 * 1000).toISOString()
+        : null;
+
+      const { error } = await (supabase as any)
+        .from("establishments")
+        .update({
+          busy_mode_enabled: busyForm.busyModeEnabled,
+          busy_pause_until: pauseUntil,
+          busy_message: busyForm.busyMessage.trim() || null,
+          accepts_scheduled_orders: busyForm.acceptsScheduledOrders,
+        })
+        .eq("id", establishment.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-establishment"] });
+      toast.success("Modo de operação atualizado.");
+    },
+    onError: (err: any) => toast.error(err.message || "Não rolou atualizar o modo de operação."),
+  });
+
   const updateSecuritySettingsMutation = useMutation({
     mutationFn: async (patch: Partial<{ otp_enabled: boolean; require_step_up_for_critical_actions: boolean }>) => {
       await updateSecuritySettings(user!.id, patch);
@@ -296,6 +334,14 @@ export default function StoreSettings() {
       toast.success("Dispositivo removido da lista de confiáveis.");
     },
     onError: (error: any) => toast.error(error.message || "Não rolou remover o dispositivo."),
+  });
+
+  const signOutAllSessionsMutation = useMutation({
+    mutationFn: async () => signOutAllSessions(),
+    onSuccess: () => {
+      toast.success("Todas as sessões foram encerradas. Faça login de novo para continuar.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou encerrar todas as sessões."),
   });
 
   const handleUploadLogo = async (file?: File) => {
@@ -498,6 +544,64 @@ export default function StoreSettings() {
         </Card>
       )}
 
+      {establishment && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Modo de operação</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">Loja lotada</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pausa pedidos imediatos por alguns minutos e mantém pedidos agendados.
+                  </p>
+                </div>
+                <Switch
+                  checked={busyForm.busyModeEnabled}
+                  onCheckedChange={(checked) => setBusyForm((prev) => ({ ...prev, busyModeEnabled: checked }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Pausar por (minutos)</Label>
+                  <Input
+                    value={busyForm.busyPauseMinutes}
+                    onChange={(e) => setBusyForm((prev) => ({ ...prev, busyPauseMinutes: e.target.value }))}
+                    placeholder="30"
+                  />
+                </div>
+                <div className="rounded-md border p-3 flex items-center justify-between mt-6">
+                  <p className="text-sm font-medium">Aceitar pedidos agendados</p>
+                  <Switch
+                    checked={busyForm.acceptsScheduledOrders}
+                    onCheckedChange={(checked) => setBusyForm((prev) => ({ ...prev, acceptsScheduledOrders: checked }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Mensagem para o cliente</Label>
+                <Textarea
+                  value={busyForm.busyMessage}
+                  onChange={(e) => setBusyForm((prev) => ({ ...prev, busyMessage: e.target.value }))}
+                  placeholder="Loja lotada agora. Novos pedidos em breve."
+                />
+              </div>
+
+              <Button
+                onClick={() => runCriticalAction(() => saveBusyModeMutation.mutate())}
+                disabled={saveBusyModeMutation.isPending}
+              >
+                {saveBusyModeMutation.isPending ? "Salvando..." : "Salvar modo de operação"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -567,6 +671,16 @@ export default function StoreSettings() {
                 </div>
               ))
             )}
+
+            <div className="pt-2 border-t">
+              <Button
+                variant="destructive"
+                onClick={() => signOutAllSessionsMutation.mutate()}
+                disabled={signOutAllSessionsMutation.isPending}
+              >
+                Encerrar todas as sessões
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
