@@ -162,6 +162,14 @@ npm run dev
 
 Use a URL exibida no terminal (normalmente `http://localhost:8081` ou `http://localhost:5173`).
 
+## Setup de Supabase Novo
+
+Se o projeto antigo do Supabase estiver sem acesso/permissão, siga:
+
+- `docs/SETUP_SUPABASE_NOVO_PROJETO.md`
+
+Esse guia cobre criação de projeto novo, atualização do `.env` e aplicação do banco via CLI ou SQL Editor.
+
 ## Bootstrap Rápido
 
 Comandos mínimos para preparar ambiente local com segurança:
@@ -187,6 +195,8 @@ Antes de homologar ou publicar, aplique todas as migrations do projeto no Supaba
 - `20260401170000_delivery_proof_hardening.sql`
 - `20260402110000_order_idempotency.sql`
 - `20260402123000_payment_webhook_idempotency_hardening.sql`
+- `20260402132000_start_plan_checkout_rpc_repair.sql`
+- `20260402143000_scale_hardening.sql`
 
 Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
 
@@ -273,6 +283,7 @@ Kit pronto para sair do zero até os primeiros lojistas pagantes:
 - `npm run preview`: preview do build frontend.
 - `npm run lint`: análise estática.
 - `npm run test`: testes.
+- `npm run load:smoke`: smoke test simples de carga na API de eventos.
 
 ## Rotas Principais
 
@@ -399,6 +410,12 @@ Cheque:
   - Regras de entrega por raio e horário.
   - Notificações em tempo real mais robustas.
   - Evolução de assinaturas e cobrança automática.
+
+## Smoke de Escala
+
+Checklist rápido:
+
+- `docs/LOAD_SMOKE_CHECKLIST.md`
 
 ## Licença
 

@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 public class AutomationReceiverApplication {
 
   public static void main(String[] args) {
+    EnvFileLoader.loadDefaults();
     SpringApplication.run(AutomationReceiverApplication.class, args);
   }
 }

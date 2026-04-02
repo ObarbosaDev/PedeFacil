@@ -222,15 +222,16 @@ export default function DriverLogin() {
             />
             <Button
               type="submit"
-              className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+              className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={submitting || (!!blockedUntil && Date.now() < blockedUntil)}
+              aria-busy={submitting}
             >
               {submitting ? "Entrando..." : "Entrar"}
               {!submitting && <LogIn className="h-4 w-4 ml-2" />}
             </Button>
 
             {!!blockedUntil && Date.now() < blockedUntil ? (
-              <p className="text-xs text-amber-300" aria-live="polite">
+              <p className="text-xs text-amber-200" aria-live="polite">
                 Muita tentativa em sequência. Aguarde um pouco e tente de novo.
               </p>
             ) : null}
@@ -295,9 +296,9 @@ export default function DriverLogin() {
         </div>
       )}
 
-      <p className="text-center text-sm text-zinc-300">
+      <p className="text-center text-sm text-zinc-300 leading-relaxed">
         Primeiro acesso?{" "}
-        <Link to="/entregador/registro" className="text-orange-400 font-semibold hover:text-orange-300 hover:underline inline-flex items-center gap-1">
+        <Link to="/entregador/registro" className="text-zinc-100 font-semibold hover:text-white hover:underline inline-flex items-center gap-1">
           Criar conta
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>

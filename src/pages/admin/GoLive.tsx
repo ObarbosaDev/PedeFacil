@@ -17,13 +17,13 @@ type CheckResult = {
 };
 
 const checklistItems = [
-  { key: "dados_loja", label: "Dados da loja completos (nome, WhatsApp, endereco)" },
-  { key: "cardapio_publicado", label: "Cardapio com fotos e produtos disponiveis" },
+  { key: "dados_loja", label: "Dados da loja completos (nome, WhatsApp, endereço)" },
+  { key: "cardapio_publicado", label: "Cardápio com fotos e produtos disponíveis" },
   { key: "entregadores_ativos", label: "Pelo menos 1 entregador ativo" },
   { key: "cupons_revisados", label: "Cupons e regras comerciais revisados" },
   { key: "fluxo_compra_testado", label: "Fluxo de compra testado do inicio ao fim" },
   { key: "fluxo_entrega_testado", label: "Fluxo de entrega com prova e PIN testado" },
-  { key: "alertas_ativos", label: "Alertas e notificacoes habilitados na operacao" },
+  { key: "alertas_ativos", label: "Alertas e notificações habilitados na operação" },
 ];
 
 const acceptanceCases = [
@@ -135,9 +135,9 @@ export default function GoLive() {
     try {
       nextResults.push({
         key: "auth",
-        label: "Autenticacao",
+        label: "Autenticação",
         ok: !!user?.id,
-        detail: user?.id ? "Sessao autenticada." : "Usuario nao autenticado.",
+        detail: user?.id ? "Sessão autenticada." : "Usuário não autenticado.",
       });
 
       const { error: dbError } = await supabase.from("establishments").select("id").limit(1);
@@ -145,7 +145,7 @@ export default function GoLive() {
         key: "db",
         label: "Banco de dados",
         ok: !dbError,
-        detail: dbError ? dbError.message : "Consulta basica funcionando.",
+        detail: dbError ? dbError.message : "Consulta básica funcionando.",
       });
 
       const { error: storageError } = await supabase.storage.from("delivery-proofs").list("", { limit: 1 });
@@ -153,7 +153,7 @@ export default function GoLive() {
         key: "storage",
         label: "Storage (delivery-proofs)",
         ok: !storageError,
-        detail: storageError ? storageError.message : "Bucket acessivel.",
+        detail: storageError ? storageError.message : "Bucket acessível.",
       });
 
       const { error: schemaError } = await (supabase as any)
@@ -164,7 +164,7 @@ export default function GoLive() {
         key: "schema",
         label: "Schema de entrega",
         ok: !schemaError,
-        detail: schemaError ? schemaError.message : "Colunas criticas disponiveis.",
+        detail: schemaError ? schemaError.message : "Colunas críticas disponíveis.",
       });
 
       const realtime = await checkRealtimeConnection();
@@ -177,7 +177,7 @@ export default function GoLive() {
 
       nextResults.push({
         key: "pwa",
-        label: "PWA basico",
+        label: "PWA básico",
         ok: "serviceWorker" in navigator,
         detail: "serviceWorker" in navigator ? "Navegador suporta service worker." : "Navegador sem suporte.",
       });
@@ -234,7 +234,7 @@ export default function GoLive() {
     return [
       { key: "gate_technical", label: "Infraestrutura 100% OK", pass: technicalGate },
       { key: "gate_operational", label: "Checklist operacional 100%", pass: operationalGate },
-      { key: "gate_acceptance", label: "Matriz de aceitacao 100%", pass: acceptanceGate },
+      { key: "gate_acceptance", label: "Matriz de aceitação 100%", pass: acceptanceGate },
       { key: "gate_compliance", label: "Conformidade de entrega >= 90%", pass: complianceGate },
       { key: "gate_score", label: "Score de prontidao >= 90%", pass: scoreGate },
     ];
@@ -342,7 +342,7 @@ export default function GoLive() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold">Central de Go-live</h1>
-          <p className="text-muted-foreground">Checklist final para liberar a operacao com seguranca.</p>
+          <p className="text-muted-foreground">Checklist final para liberar a operação com segurança.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/admin/go-live/apresentacao">
@@ -350,14 +350,14 @@ export default function GoLive() {
           </Link>
           <Button onClick={runDiagnostics} disabled={running}>
             <RefreshCw className={`h-4 w-4 mr-2 ${running ? "animate-spin" : ""}`} />
-            {running ? "Rodando diagnostico..." : "Rodar diagnostico"}
+            {running ? "Rodando diagnóstico..." : "Rodar diagnóstico"}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Score go-live</p><p className="text-2xl font-bold">{readinessScore}%</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Checks tecnicos OK</p><p className="text-2xl font-bold">{technicalPassed}/{technicalTotal || 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Checks técnicos OK</p><p className="text-2xl font-bold">{technicalPassed}/{technicalTotal || 0}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Checklist operacional</p><p className="text-2xl font-bold">{checklistDone}/{checklistTotal}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Status</p><p className="text-2xl font-bold">{releaseApproved ? "Liberado" : "Bloqueado"}</p></CardContent></Card>
       </div>
@@ -368,7 +368,7 @@ export default function GoLive() {
             <p className="text-sm font-semibold">{releaseApproved ? "Go-live aprovado" : "Go-live ainda bloqueado"}</p>
             <p className="text-xs text-muted-foreground mt-1">
               {releaseApproved
-                ? "Todos os gates de liberacao passaram. Ambiente pronto para cliente final."
+                ? "Todos os gates de liberação passaram. Ambiente pronto para cliente final."
                 : "Ainda existem gates pendentes. Feche os pontos abaixo antes de liberar."}
             </p>
           </div>
@@ -381,12 +381,12 @@ export default function GoLive() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Diagnostico tecnico</CardTitle>
-          <CardDescription>Valida infraestrutura minima para operacao real.</CardDescription>
+          <CardTitle>Diagnóstico técnico</CardTitle>
+          <CardDescription>Valida infraestrutura mínima para operação real.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {results.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ainda nao executado.</p>
+            <p className="text-sm text-muted-foreground">Ainda não executado.</p>
           ) : (
             results.map((result) => (
               <div key={result.key} className="rounded-lg border p-3 flex items-start justify-between gap-3">
@@ -428,17 +428,17 @@ export default function GoLive() {
         <CardContent className="p-4 text-sm text-muted-foreground">
           <p className="font-semibold text-foreground flex items-center gap-2 mb-1">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Recomendacao de liberacao
+            Recomendação de liberação
           </p>
           <p>
-            Libere a operacao quando o score estiver acima de 85% e todos os fluxos de compra, entrega e comprovacao passarem em teste real.
+            Libere a operação quando o score estiver acima de 85% e todos os fluxos de compra, entrega e comprovação passarem em teste real.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Gates de liberacao</CardTitle>
+          <CardTitle>Gates de liberação</CardTitle>
           <CardDescription>Regras objetivas para aprovar abertura ao cliente final.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -453,8 +453,8 @@ export default function GoLive() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Matriz de aceitacao (PASS/FAIL)</CardTitle>
-          <CardDescription>Execute os cenarios e marque resultado antes da liberacao.</CardDescription>
+          <CardTitle>Matriz de aceitação (PASS/FAIL)</CardTitle>
+          <CardDescription>Execute os cenários e marque resultado antes da liberação.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">Resultado: {acceptanceDone}/{acceptanceTotal} PASS</div>
@@ -474,7 +474,7 @@ export default function GoLive() {
       <Card>
         <CardHeader>
           <CardTitle>Auditoria de entregas</CardTitle>
-          <CardDescription>Controle de conformidade das ultimas entregas concluidas.</CardDescription>
+          <CardDescription>Controle de conformidade das últimas entregas concluídas.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -497,7 +497,7 @@ export default function GoLive() {
           </div>
 
           {deliveryAuditRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem entregas concluidas para auditar.</p>
+            <p className="text-sm text-muted-foreground">Sem entregas concluídas para auditar.</p>
           ) : (
             <div className="space-y-2">
               {(deliveryAuditRows as any[]).slice(0, 20).map((row) => {

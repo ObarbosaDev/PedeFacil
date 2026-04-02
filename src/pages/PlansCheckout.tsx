@@ -1,21 +1,22 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BadgeCheck, Check, Clock3, Copy, CreditCard, Lock, LogIn, QrCode, ShieldCheck } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Check, CreditCard, ExternalLink, Lock, LogIn, QrCode, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { BillingMode, getPlanBySlug, getPlanPrice, plans } from "@/lib/plans";
-import { buildPixPayload, buildPixQrImageUrl } from "@/lib/pix";
-import { CheckoutPaymentMethod, CheckoutSession, confirmPlanPayment, getMyStoreSubscription, startPlanCheckout } from "@/lib/subscription";
+import {
+  CheckoutPaymentMethod,
+  CheckoutSession,
+  createExternalPlanCheckout,
+  getMyStoreSubscription,
+  revalidateExternalPlanPayment,
+  startPlanCheckout,
+} from "@/lib/subscription";
 import { trackProductEvent } from "@/lib/product-analytics";
-
-const PIX_KEY = "067.444.201-60";
-const MERCHANT_NAME = "PEDEFACIL";
-const MERCHANT_CITY = "SAO PAULO";
+import { supabase } from "@/integrations/supabase/client";
 
 type PaymentMethod = "pix" | "card";
 
@@ -34,7 +35,7 @@ export default function PlansCheckout() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
-  const [qrErrored, setQrErrored] = useState(false);
+  const [paymentId, setPaymentId] = useState("");
 
   const billingModeParam = searchParams.get("billing");
   const billingMode: BillingMode = billingModeParam === "yearly" ? "yearly" : "monthly";
@@ -47,11 +48,15 @@ export default function PlansCheckout() {
     queryKey: ["my-store-subscription", user?.id],
     queryFn: () => getMyStoreSubscription(),
     enabled: !!user,
+    refetchInterval: (query) => {
+      const data = query.state.data as Awaited<ReturnType<typeof getMyStoreSubscription>>;
+      if (!data) return false;
+      return data.status === "pending_payment" ? 5000 : false;
+    },
   });
 
   useEffect(() => {
-    if (!subscription) return;
-    if (!subscription.checkout_session_id) return;
+    if (!subscription?.checkout_session_id) return;
 
     setCheckout((prev) => {
       if (prev?.checkout_session_id === subscription.checkout_session_id) return prev;
@@ -69,6 +74,19 @@ export default function PlansCheckout() {
     });
   }, [subscription]);
 
+  useEffect(() => {
+    const paymentReturn = searchParams.get("payment_return");
+    if (!paymentReturn) return;
+
+    if (paymentReturn === "success") {
+      toast.success("Pagamento recebido. Estamos validando e liberando seu acesso.");
+    } else if (paymentReturn === "pending") {
+      toast.info("Pagamento em análise. Atualizamos o status automaticamente.");
+    } else if (paymentReturn === "failure") {
+      toast.error("O pagamento não foi concluído. Você pode tentar de novo.");
+    }
+  }, [searchParams]);
+
   const formatPrice = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -76,15 +94,19 @@ export default function PlansCheckout() {
       maximumFractionDigits: 0,
     }).format(value);
 
-  const getFriendlyPaymentConfirmError = (error: any) => {
-    const raw = String(error?.message || "").toLowerCase();
-    if (raw.includes("outra sessao")) {
-      return "Esse comprovante já foi usado em outra cobrança. Gere um novo checkout para continuar.";
+  const enforceActionRateLimit = async (actionKey: string, maxHits: number, windowSeconds: number) => {
+    if (!user?.id) return;
+    const { data, error } = await (supabase as any).rpc("enforce_rate_limit", {
+      p_action_key: actionKey,
+      p_subject_key: user.id,
+      p_max_hits: maxHits,
+      p_window_seconds: windowSeconds,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row && row.allowed === false) {
+      throw new Error(`Muitas tentativas seguidas. Aguarde ${Number(row.retry_after_seconds || 0)}s.`);
     }
-    if (raw.includes("failed to fetch") || raw.includes("network")) {
-      return "Conexao oscilou. Pode tentar confirmar de novo sem medo: nao vai duplicar pagamento.";
-    }
-    return error?.message || "Não rolou confirmar o pagamento agora.";
   };
 
   const planPrice = useMemo(() => (plan ? getPlanPrice(plan, billingMode) : 0), [plan, billingMode]);
@@ -93,91 +115,81 @@ export default function PlansCheckout() {
     return planPrice;
   }, [checkout?.amount_cents, planPrice]);
 
-  const pixCode = useMemo(() => {
-    if (!plan) return "";
-
-    const txid = checkout?.checkout_session_id
-      ? checkout.checkout_session_id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 25)
-      : `PLANO${plan.slug.toUpperCase()}`;
-
-    return buildPixPayload({
-      key: PIX_KEY,
-      amount: effectivePrice,
-      merchantName: MERCHANT_NAME,
-      merchantCity: MERCHANT_CITY,
-      txid,
-      description: `Assinatura ${plan.name}`,
-    });
-  }, [checkout?.checkout_session_id, plan, effectivePrice]);
-
-  const pixQrUrl = useMemo(() => (pixCode ? buildPixQrImageUrl(pixCode) : ""), [pixCode]);
+  const nextHref = `/planos/checkout?plano=${plan.slug}&billing=${billingMode}`;
+  const isActive = subscription?.status === "active";
 
   const startCheckoutMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Faça login para gerar seu checkout.");
-      return startPlanCheckout({
+      await enforceActionRateLimit("plans_start_checkout", 8, 300);
+
+      const checkoutSession = await startPlanCheckout({
         planSlug: plan.slug,
         billingCycle: billingMode,
         paymentMethod: paymentMethod as CheckoutPaymentMethod,
       });
-    },
-    onSuccess: (data) => {
-      setCheckout(data);
-      queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
-      void trackProductEvent("funnel_checkout_payment_generated", {
-        plan: data.plan_slug,
-        billing: data.billing_cycle,
-        method: data.payment_method,
-        status: data.status,
+
+      const baseUrl = `${window.location.origin}/planos/checkout?plano=${plan.slug}&billing=${billingMode}`;
+      const payment = await createExternalPlanCheckout({
+        checkoutSessionId: checkoutSession.checkout_session_id,
+        successUrl: `${baseUrl}&payment_return=success`,
+        pendingUrl: `${baseUrl}&payment_return=pending`,
+        failureUrl: `${baseUrl}&payment_return=failure`,
       });
 
-      if (data.status === "active") {
+      return { checkoutSession, payment };
+    },
+    onSuccess: async ({ checkoutSession, payment }) => {
+      setCheckout(checkoutSession);
+      await queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
+
+      void trackProductEvent("funnel_checkout_payment_generated", {
+        plan: checkoutSession.plan_slug,
+        billing: checkoutSession.billing_cycle,
+        method: checkoutSession.payment_method,
+        status: checkoutSession.status,
+        provider: payment.provider,
+      });
+
+      if (payment.already_active || checkoutSession.status === "active") {
         toast.success("Sua assinatura já está ativa. Painel liberado.");
         return;
       }
 
-      toast.success("Checkout gerado. Agora é só confirmar o pagamento.");
+      if (!payment.checkout_url) {
+        throw new Error("A cobrança foi criada, mas o link de pagamento não voltou.");
+      }
+
+      toast.success("Bora pagar com segurança no Mercado Pago. Redirecionando...");
+      window.location.href = payment.checkout_url;
     },
     onError: (error: any) => {
-      toast.error(error?.message || "Não rolou gerar o checkout agora.");
+      toast.error(error?.message || "Não rolou iniciar seu pagamento agora.");
     },
   });
 
-  const confirmPaymentMutation = useMutation({
+  const revalidateMutation = useMutation({
     mutationFn: async () => {
-      if (!checkout?.checkout_session_id) throw new Error("Gere a cobrança antes de confirmar o pagamento.");
-
-      return confirmPlanPayment({
+      if (!checkout?.checkout_session_id) throw new Error("Gere uma cobrança antes de revalidar.");
+      await enforceActionRateLimit("plans_revalidate_payment", 10, 300);
+      return revalidateExternalPlanPayment({
         checkoutSessionId: checkout.checkout_session_id,
+        paymentId: paymentId.trim() || undefined,
       });
     },
-    onSuccess: async () => {
-      void trackProductEvent("funnel_checkout_payment_confirmed", {
-        plan: checkout?.plan_slug || plan.slug,
-        billing: checkout?.billing_cycle || billingMode,
-        method: checkout?.payment_method || paymentMethod,
-      });
-      toast.success("Pagamento confirmado e acesso liberado.");
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
       await queryClient.invalidateQueries({ queryKey: ["store-panel-access", user?.id] });
+      if (result.revalidated) {
+        toast.success("Pagamento revalidado com sucesso.");
+      } else {
+        toast.info("Revalidação feita. Status ainda pendente.");
+      }
     },
     onError: (error: any) => {
-      toast.error(getFriendlyPaymentConfirmError(error));
+      toast.error(error?.message || "Não rolou revalidar o pagamento agora.");
     },
   });
-
-  const copyPixCode = async () => {
-    try {
-      await navigator.clipboard.writeText(pixCode);
-      toast.success("Código PIX copiado.");
-    } catch {
-      toast.error("Não deu para copiar agora.");
-    }
-  };
-
-  const nextHref = `/planos/checkout?plano=${plan.slug}&billing=${billingMode}`;
-
-  const isActive = subscription?.status === "active";
 
   useEffect(() => {
     void trackProductEvent("funnel_checkout_started", {
@@ -223,7 +235,7 @@ export default function PlansCheckout() {
               <h1 className="text-3xl md:text-4xl font-black mt-2">
                 Libere o plano <span className="text-orange-600">{plan.name}</span> e ative seu painel.
               </h1>
-              <p className="text-zinc-600 mt-2">Conta criada + pagamento confirmado = acesso liberado automaticamente.</p>
+              <p className="text-zinc-600 mt-2">Conta criada + pagamento aprovado = acesso liberado automaticamente.</p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 min-w-[240px]">
@@ -277,8 +289,10 @@ export default function PlansCheckout() {
         <section className="grid grid-cols-1 lg:grid-cols-[0.58fr_0.42fr] gap-4">
           <Card className="border-zinc-200 bg-white shadow-[0_24px_80px_-55px_rgba(0,0,0,0.45)]">
             <CardHeader>
-              <CardTitle>Forma de pagamento</CardTitle>
-              <CardDescription>Gere a cobrança e confirme o pagamento para liberar o acesso.</CardDescription>
+              <CardTitle>Pagamento real com Mercado Pago</CardTitle>
+              <CardDescription>
+                Clique para gerar sua cobrança e finalizar em ambiente seguro (PIX ou cartão).
+              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
@@ -289,7 +303,6 @@ export default function PlansCheckout() {
                     type="button"
                     onClick={() => {
                       setSelectedPlanSlug(item.slug);
-                      setQrErrored(false);
                       void trackProductEvent("funnel_plan_selected", {
                         source: "checkout_plan_switch",
                         plan: item.slug,
@@ -332,7 +345,7 @@ export default function PlansCheckout() {
                     PIX
                   </span>
                   <p className={`text-xs mt-1 ${paymentMethod === "pix" ? "text-zinc-300" : "text-zinc-500"}`}>
-                    Aprovação rápida
+                    Pagamento instantâneo
                   </p>
                 </button>
 
@@ -355,99 +368,55 @@ export default function PlansCheckout() {
                     Cartão
                   </span>
                   <p className={`text-xs mt-1 ${paymentMethod === "card" ? "text-zinc-300" : "text-zinc-500"}`}>
-                    Crédito ou débito
+                    Crédito e débito
                   </p>
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => startCheckoutMutation.mutate()}
-                  disabled={!user || startCheckoutMutation.isPending || loadingSubscription || isActive}
-                >
-                  {startCheckoutMutation.isPending ? "Gerando cobrança..." : "Gerar cobrança"}
-                </Button>
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+                <p className="font-semibold">Fechamento 100% seguro</p>
+                <p className="text-sm text-zinc-600">
+                  O pagamento abre no Mercado Pago. Depois da aprovação, o sistema atualiza sua assinatura e libera o painel sem ação manual.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => startCheckoutMutation.mutate()}
+                    disabled={!user || startCheckoutMutation.isPending || loadingSubscription || isActive}
+                  >
+                    {startCheckoutMutation.isPending ? "Gerando e redirecionando..." : "Pagar com Mercado Pago"}
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  onClick={() => confirmPaymentMutation.mutate()}
-                  disabled={!checkout?.checkout_session_id || confirmPaymentMutation.isPending || isActive}
-                >
-                  {confirmPaymentMutation.isPending ? "Confirmando..." : "Já paguei, validar e liberar"}
-                </Button>
-              </div>
-
-              {paymentMethod === "pix" ? (
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:p-5">
-                  <p className="font-semibold">Pague com PIX</p>
-                  <p className="text-sm text-zinc-600 mt-1">
-                    Escaneie o QR Code ou copie o código PIX abaixo para pagar e liberar sua assinatura.
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
+                      void queryClient.invalidateQueries({ queryKey: ["store-panel-access", user?.id] });
+                    }}
+                    disabled={!user}
+                  >
+                    Atualizar status
+                  </Button>
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <p className="text-xs text-zinc-500">
+                    Se o pagamento aprovou e ainda não liberou, cole o ID do pagamento do Mercado Pago e revalide.
                   </p>
-
-                  <div className="mt-4 flex flex-col sm:flex-row gap-4">
-                    <div className="rounded-xl bg-white border border-zinc-200 p-3 w-fit shadow-sm">
-                      {!qrErrored ? (
-                        <img
-                          src={pixQrUrl}
-                          alt="QR Code PIX"
-                          className="h-52 w-52"
-                          onError={() => setQrErrored(true)}
-                        />
-                      ) : (
-                        <div className="h-52 w-52 grid place-items-center text-center px-4 text-sm text-zinc-500">
-                          Não carregou o QR agora. Use o PIX Copia e Cola abaixo.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 space-y-3">
-                      <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                        <p className="text-xs text-zinc-500">Chave PIX</p>
-                        <p className="font-semibold">{PIX_KEY}</p>
-                      </div>
-                      <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                        <p className="text-xs text-zinc-500">PIX Copia e Cola</p>
-                        <p className="text-[11px] break-all text-zinc-700 mt-1">{pixCode}</p>
-                      </div>
-
-                      <Button className="w-full rounded-full" onClick={copyPixCode}>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copiar código PIX
-                      </Button>
-
-                      <p className="text-xs text-zinc-500 inline-flex items-center gap-1">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        A confirmação costuma cair em poucos segundos.
-                      </p>
-                    </div>
-                  </div>
+                  <input
+                    value={paymentId}
+                    onChange={(event) => setPaymentId(event.target.value)}
+                    placeholder="ID do pagamento (opcional)"
+                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => revalidateMutation.mutate()}
+                    disabled={!checkout?.checkout_session_id || revalidateMutation.isPending}
+                  >
+                    {revalidateMutation.isPending ? "Revalidando..." : "Revalidar pagamento"}
+                  </Button>
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:p-5 space-y-3">
-                  <p className="font-semibold">Pagamento com cartão</p>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div>
-                      <Label>Nome no cartão</Label>
-                      <Input placeholder="Nome completo" />
-                    </div>
-                    <div>
-                      <Label>Número do cartão</Label>
-                      <Input placeholder="0000 0000 0000 0000" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Validade</Label>
-                        <Input placeholder="MM/AA" />
-                      </div>
-                      <div>
-                        <Label>CVV</Label>
-                        <Input placeholder="123" />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-zinc-500">Após preencher, clique em "Gerar cobrança" e depois em "Já paguei, validar e liberar".</p>
-                </div>
-              )}
+              </div>
             </CardContent>
           </Card>
 
@@ -490,7 +459,7 @@ export default function PlansCheckout() {
               </div>
 
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Pagamento confirmado libera automaticamente o acesso ao painel do lojista.
+                Pagamento aprovado libera automaticamente o acesso ao painel do lojista.
               </div>
 
               <Link to="/admin" className="block pt-2">
@@ -506,4 +475,3 @@ export default function PlansCheckout() {
     </div>
   );
 }
-

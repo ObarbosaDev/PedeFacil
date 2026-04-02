@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +68,7 @@ export default function DeliveryTracking() {
     if (previousStatus === data.delivery_status) return;
 
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Atualizacao da entrega", {
+      new Notification("Atualização da entrega", {
         body: statusLabels[data.delivery_status] || data.delivery_status,
       });
     }
@@ -85,10 +85,10 @@ export default function DeliveryTracking() {
       <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle>Rastreio nao encontrado</CardTitle>
+            <CardTitle>Rastreio não encontrado</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Esse link nao bate com nenhuma entrega ativa.
+            Esse link não bate com nenhuma entrega ativa.
           </CardContent>
         </Card>
       </div>
@@ -99,6 +99,9 @@ export default function DeliveryTracking() {
     <div className="min-h-screen bg-muted/30">
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
         <div>
+          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline">
+            Voltar para o início
+          </Link>
           <p className="text-sm text-primary font-medium flex items-center gap-2">
             <Bike className="h-4 w-4" />
             Acompanhamento da entrega
@@ -120,7 +123,7 @@ export default function DeliveryTracking() {
         {"Notification" in window && Notification.permission !== "granted" && (
           <Card>
             <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-sm text-muted-foreground">Ative alertas para receber notificacao quando o status mudar.</p>
+              <p className="text-sm text-muted-foreground">Ative alertas para receber notificação quando o status mudar.</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -198,7 +201,7 @@ export default function DeliveryTracking() {
           <CardContent className="p-4 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground flex items-center gap-2 mb-1">
               <ShieldCheck className="h-4 w-4 text-primary" />
-              Confirmacao da entrega
+              Confirmação da entrega
             </p>
             <p>O entregador precisa confirmar o PIN final para concluir a corrida: <span className="font-semibold text-foreground">{data.confirmation_code}</span></p>
             <p className="mt-2 flex items-center gap-2">
@@ -207,10 +210,10 @@ export default function DeliveryTracking() {
             </p>
             {data.proof_image_url && (
               <div className="mt-3">
-                <p className="font-medium text-foreground mb-2">Comprovacao da entrega</p>
+                <p className="font-medium text-foreground mb-2">Comprovação da entrega</p>
                 <img
                   src={data.proof_image_url}
-                  alt="Comprovacao da entrega"
+                  alt="Comprovação da entrega"
                   className="max-h-64 rounded-lg border object-cover"
                   loading="lazy"
                 />
@@ -223,12 +226,12 @@ export default function DeliveryTracking() {
             )}
             {data.delivered_accuracy_meters != null && (
               <p className="mt-1 text-xs">
-                GPS da confirmacao: {Math.round(Number(data.delivered_accuracy_meters))}m de precisao.
+                GPS da confirmação: {Math.round(Number(data.delivered_accuracy_meters))}m de precisão.
               </p>
             )}
             {data.gps_bypass_reason && (
               <p className="mt-1 text-xs text-amber-700">
-                Entrega concluida com justificativa sem GPS: <span className="font-semibold">{data.gps_bypass_reason}</span>
+                Entrega concluída com justificativa sem GPS: <span className="font-semibold">{data.gps_bypass_reason}</span>
               </p>
             )}
           </CardContent>

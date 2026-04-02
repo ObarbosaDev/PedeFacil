@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "automation:receiver": "node automation/whatsapp-receiver.mjs",
+    "load:smoke": "node scripts/load-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

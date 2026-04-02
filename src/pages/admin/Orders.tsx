@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +31,17 @@ const statusTone: Record<string, string> = {
   in_preparation: "border-l-orange-500",
   ready: "border-l-emerald-500",
   delivered: "border-l-zinc-400",
+};
+
+const quickStatusActions: Record<string, { label: string; next: string }[]> = {
+  received: [{ label: "Confirmar", next: "confirmed" }],
+  confirmed: [
+    { label: "Iniciar preparo", next: "in_preparation" },
+    { label: "Marcar pronto", next: "ready" },
+  ],
+  in_preparation: [{ label: "Marcar pronto", next: "ready" }],
+  ready: [{ label: "Concluir", next: "delivered" }],
+  delivered: [],
 };
 
 function getSlaColumnTone(lateRatio: number) {
@@ -274,8 +286,8 @@ export default function Orders() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["order-history"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", establishment?.id] });
+      queryClient.invalidateQueries({ queryKey: ["order-history", establishment?.id] });
       toast.success("Status atualizado!");
     },
   });
@@ -567,7 +579,15 @@ export default function Orders() {
   };
 
   const ordersByStatus = kanbanColumns.map((status) => {
-    const columnOrders = orders.filter((order: any) => order.status === status);
+    const columnOrders = orders.filter((order: any) => {
+      const isScheduledOpen =
+        Boolean(order.is_scheduled) &&
+        Boolean(order.scheduled_for) &&
+        new Date(order.scheduled_for).getTime() > Date.now() &&
+        !["delivered", "cancelled"].includes(order.status);
+      if (isScheduledOpen) return false;
+      return order.status === status;
+    });
     const lateCount = columnOrders.reduce((acc, order) => {
       const slaInfo = getSlaInfo(order);
       return acc + (slaInfo?.isLate ? 1 : 0);
@@ -602,15 +622,32 @@ export default function Orders() {
   const summary = useMemo(() => {
     const inProgress = orders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
     const delivered = orders.filter((o: any) => o.status === "delivered").length;
+    const scheduledOpen = orders.filter((o: any) => {
+      if (!o.is_scheduled || !o.scheduled_for) return false;
+      if (["delivered", "cancelled"].includes(o.status)) return false;
+      return new Date(o.scheduled_for).getTime() > Date.now();
+    }).length;
+
     return {
       total: totalCount,
       inProgress,
       delivered,
       cancelled: cancelledOrders.length,
+      scheduledOpen,
       driversOnline: (deliveryDrivers as any[]).filter((driver) => driver.is_active && ["online", "busy"].includes(driver.availability_mode || "")).length,
       deliveriesInRoute: (orderDeliveries as any[]).filter((delivery) => ["assigned", "accepted", "picked_up"].includes(delivery.status)).length,
     };
   }, [orders, cancelledOrders.length, totalCount, deliveryDrivers, orderDeliveries]);
+
+  const scheduledOrders = useMemo(() => {
+    return orders
+      .filter((order: any) => {
+        if (!order.is_scheduled || !order.scheduled_for) return false;
+        if (["delivered", "cancelled"].includes(order.status)) return false;
+        return new Date(order.scheduled_for).getTime() > Date.now();
+      })
+      .sort((a: any, b: any) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime());
+  }, [orders]);
 
   if (!establishment) {
     return <p className="text-muted-foreground text-center py-12">Configura sua loja primeiro.</p>;
@@ -626,6 +663,9 @@ export default function Orders() {
           <h1 className="text-3xl font-bold">Central de pedidos</h1>
           <p className="text-muted-foreground">Atualização em tempo real para você tocar a operação no ritmo certo.</p>
         </div>
+        <Link to="/admin/incidentes">
+          <Button variant="outline" size="sm">Ver incidentes</Button>
+        </Link>
       </div>
 
       <Card>
@@ -661,14 +701,47 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold">{summary.total}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Em andamento</p><p className="text-2xl font-bold">{summary.inProgress}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregues</p><p className="text-2xl font-bold">{summary.delivered}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Cancelados</p><p className="text-2xl font-bold">{summary.cancelled}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Agendados</p><p className="text-2xl font-bold">{summary.scheduledOpen}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Frota online</p><p className="text-2xl font-bold">{summary.driversOnline}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Rotas ativas</p><p className="text-2xl font-bold">{summary.deliveriesInRoute}</p></CardContent></Card>
       </div>
+
+      {scheduledOrders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pedidos agendados</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {scheduledOrders.map((order: any) => (
+              <div key={order.id} className="rounded-lg border p-3 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-semibold">{order.customer_name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {order.order_type === "delivery" ? "Entrega" : "Retirada"} • Agendado para {formatDate(order.scheduled_for)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Total: {formatCurrency(Number(order.total || 0))}</p>
+                </div>
+                <div className="flex gap-2">
+                  <StatusBadge status={order.status} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => updateStatus.mutate({ id: order.id, status: "confirmed" })}
+                    disabled={updateStatus.isPending || order.status === "confirmed"}
+                  >
+                    Confirmar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {lateOrders.length > 0 && (
         <Card className="border-destructive/30 bg-destructive/5">
@@ -822,7 +895,7 @@ export default function Orders() {
                                   )}
                                   {delivery.delivered_accuracy_meters != null && (
                                     <p className="text-[11px] text-muted-foreground">
-                                      GPS: {Math.round(Number(delivery.delivered_accuracy_meters))}m de precisao
+                                      GPS: {Math.round(Number(delivery.delivered_accuracy_meters))}m de precisão
                                     </p>
                                   )}
                                   {delivery.gps_bypass_reason && (
@@ -886,6 +959,19 @@ export default function Orders() {
                             </div>
 
                             <div className="flex gap-2 flex-wrap">
+                              {(quickStatusActions[order.status] || []).map((action) => (
+                                <Button
+                                  key={`${order.id}-${action.next}`}
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-8 text-xs"
+                                  onClick={() => updateStatus.mutate({ id: order.id, status: action.next })}
+                                  disabled={updateStatus.isPending || order.status === action.next}
+                                >
+                                  {action.label}
+                                </Button>
+                              ))}
+
                               {canDispatch && (
                                 <>
                                   <Select
@@ -939,6 +1025,7 @@ export default function Orders() {
                                   size="sm"
                                   className="h-8 text-xs"
                                   onClick={() => updateStatus.mutate({ id: order.id, status: nextStatus })}
+                                  disabled={updateStatus.isPending}
                                 >
                                   Avançar para {ORDER_STATUS_LABELS[nextStatus]}
                                 </Button>
@@ -949,6 +1036,7 @@ export default function Orders() {
                                   size="sm"
                                   className="h-8 text-xs"
                                   onClick={() => updateStatus.mutate({ id: order.id, status: "cancelled" })}
+                                  disabled={updateStatus.isPending}
                                 >
                                   Cancelar pedido
                                 </Button>
@@ -990,5 +1078,9 @@ export default function Orders() {
     </div>
   );
 }
+
+
+
+
 
 

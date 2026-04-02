@@ -1,12 +1,27 @@
 
 -- Create role enum
-CREATE TYPE public.app_role AS ENUM ('super_admin', 'store_owner', 'attendant');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'app_role') THEN
+    CREATE TYPE public.app_role AS ENUM ('super_admin', 'store_owner', 'attendant');
+  END IF;
+END $$;
 
 -- Create order status enum
-CREATE TYPE public.order_status AS ENUM ('received', 'confirmed', 'in_preparation', 'ready', 'delivered', 'cancelled');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
+    CREATE TYPE public.order_status AS ENUM ('received', 'confirmed', 'in_preparation', 'ready', 'delivered', 'cancelled');
+  END IF;
+END $$;
 
 -- Create order type enum
-CREATE TYPE public.order_type AS ENUM ('pickup', 'delivery');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
+    CREATE TYPE public.order_type AS ENUM ('pickup', 'delivery');
+  END IF;
+END $$;
 
 -- Function to auto-update updated_at
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -43,6 +58,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -206,11 +222,71 @@ CREATE POLICY "Owners can update loyalty accounts" ON public.loyalty_accounts FO
 CREATE TRIGGER update_loyalty_updated_at BEFORE UPDATE ON public.loyalty_accounts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Storage bucket for product images
-INSERT INTO storage.buckets (id, name, public) VALUES ('product-images', 'product-images', true);
-CREATE POLICY "Anyone can view product images" ON storage.objects FOR SELECT USING (bucket_id = 'product-images');
-CREATE POLICY "Authenticated users can upload product images" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'product-images');
-CREATE POLICY "Authenticated users can update product images" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'product-images');
-CREATE POLICY "Authenticated users can delete product images" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'product-images');
+INSERT INTO storage.buckets (id, name, public)
+SELECT 'product-images', 'product-images', true
+WHERE NOT EXISTS (
+  SELECT 1 FROM storage.buckets WHERE id = 'product-images'
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'Anyone can view product images'
+  ) THEN
+    CREATE POLICY "Anyone can view product images"
+      ON storage.objects FOR SELECT
+      USING (bucket_id = 'product-images');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'Authenticated users can upload product images'
+  ) THEN
+    CREATE POLICY "Authenticated users can upload product images"
+      ON storage.objects FOR INSERT TO authenticated
+      WITH CHECK (bucket_id = 'product-images');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'Authenticated users can update product images'
+  ) THEN
+    CREATE POLICY "Authenticated users can update product images"
+      ON storage.objects FOR UPDATE TO authenticated
+      USING (bucket_id = 'product-images');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'Authenticated users can delete product images'
+  ) THEN
+    CREATE POLICY "Authenticated users can delete product images"
+      ON storage.objects FOR DELETE TO authenticated
+      USING (bucket_id = 'product-images');
+  END IF;
+END $$;
 
 -- Auto-assign store_owner role on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user_role()
@@ -221,6 +297,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+DROP TRIGGER IF EXISTS on_auth_user_created_role ON auth.users;
 CREATE TRIGGER on_auth_user_created_role
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_role();

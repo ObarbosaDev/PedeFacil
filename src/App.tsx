@@ -29,6 +29,9 @@ const Loyalty = lazy(() => import("./pages/admin/Loyalty"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Automations = lazy(() => import("./pages/admin/Automations"));
 const Drivers = lazy(() => import("./pages/admin/Drivers"));
+const Incidents = lazy(() => import("./pages/admin/Incidents"));
+const DriverRanking = lazy(() => import("./pages/admin/DriverRanking"));
+const PaymentsLedger = lazy(() => import("./pages/admin/PaymentsLedger"));
 const GoLive = lazy(() => import("./pages/admin/GoLive"));
 const GoLivePresentation = lazy(() => import("./pages/admin/GoLivePresentation"));
 const RoadmapChecklist = lazy(() => import("./pages/admin/RoadmapChecklist"));
@@ -138,6 +141,9 @@ function AppRoutes() {
           <Route path="cupons" element={<Coupons />} />
           <Route path="automacoes" element={<Automations />} />
           <Route path="entregadores" element={<Drivers />} />
+          <Route path="entregadores/ranking" element={<DriverRanking />} />
+          <Route path="incidentes" element={<Incidents />} />
+          <Route path="pagamentos/ledger" element={<PaymentsLedger />} />
           <Route path="go-live" element={<GoLive />} />
           <Route path="go-live/apresentacao" element={<GoLivePresentation />} />
           <Route path="roadmap" element={<RoadmapChecklist />} />

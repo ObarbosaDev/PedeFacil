@@ -24,6 +24,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  signOutAllSessions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -155,6 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
+  const signOutAllSessions = async () => {
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) throw error;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -171,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword,
         updatePassword,
         signOut,
+        signOutAllSessions,
       }}
     >
       {children}

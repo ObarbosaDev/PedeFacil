@@ -87,6 +87,8 @@ BEGIN
   END IF;
 END $$;
 
+DROP FUNCTION IF EXISTS public.get_delivery_tracking(TEXT);
+
 CREATE OR REPLACE FUNCTION public.get_delivery_tracking(p_tracking_token TEXT)
 RETURNS TABLE (
   delivery_id UUID,

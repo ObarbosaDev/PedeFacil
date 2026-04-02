@@ -1,4 +1,4 @@
-﻿-- Subscription and billing core for store owner access control
+-- Subscription and billing core for store owner access control
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'plan_billing_cycle') THEN

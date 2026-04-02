@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS public.whatsapp_automation_settings (
+CREATE TABLE IF NOT EXISTS public.whatsapp_automation_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   establishment_id UUID NOT NULL UNIQUE REFERENCES public.establishments(id) ON DELETE CASCADE,
   is_enabled BOOLEAN NOT NULL DEFAULT false,

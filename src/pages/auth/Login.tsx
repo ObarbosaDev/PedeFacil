@@ -180,7 +180,7 @@ export default function Login() {
                 <FormItem>
                   <FormLabel>E-mail</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="seunome@empresa.com" autoComplete="email" {...field} />
+                    <Input type="email" placeholder="seuemail@empresa.com" autoComplete="email" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -194,7 +194,7 @@ export default function Login() {
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Senha</FormLabel>
-                    <Link to="/esqueci-senha" className="text-xs text-orange-400 hover:text-orange-300 hover:underline">
+                    <Link to="/esqueci-senha" className="text-xs text-zinc-300 hover:text-zinc-100 hover:underline">
                       Esqueci minha senha
                     </Link>
                   </div>
@@ -233,13 +233,18 @@ export default function Login() {
               )}
             />
 
-            <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={loading || (!!blockedUntil && Date.now() < blockedUntil)}>
+            <Button
+              type="submit"
+              className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={loading || (!!blockedUntil && Date.now() < blockedUntil)}
+              aria-busy={loading}
+            >
               {loading ? "Entrando..." : "Entrar no painel"}
               {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
             </Button>
 
             {!!blockedUntil && Date.now() < blockedUntil ? (
-              <p className="text-xs text-amber-300" aria-live="polite">
+              <p className="text-xs text-amber-200" aria-live="polite">
                 Muita tentativa em sequência. Aguarde um pouco e tente de novo.
               </p>
             ) : null}
@@ -304,11 +309,11 @@ export default function Login() {
         </div>
       )}
 
-      <p className="text-center text-sm text-zinc-300">
+      <p className="text-center text-sm text-zinc-300 leading-relaxed">
         Ainda não tem conta?{" "}
         <Link
           to={`/registro${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
-          className="text-orange-400 font-semibold hover:text-orange-300 hover:underline"
+          className="text-zinc-100 font-semibold hover:text-white hover:underline"
         >
           Criar conta grátis
         </Link>

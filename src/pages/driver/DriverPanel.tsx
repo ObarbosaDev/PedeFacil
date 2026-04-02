@@ -31,10 +31,10 @@ const modeLabels: Record<string, string> = {
 
 const deliveryIssuePresets = [
   "Cliente ausente",
-  "Endereco incompleto",
+  "Endereço incompleto",
   "Sem troco",
-  "Transito pesado",
-  "Loja atrasou a saida",
+  "Trânsito pesado",
+  "Loja atrasou a saída",
 ];
 
 type OfflineDriverAction =
@@ -331,7 +331,7 @@ export default function DriverPanel() {
 
   const captureDeliveryGeolocation = (deliveryId: string) => {
     if (!("geolocation" in navigator)) {
-      toast.error("Seu aparelho nao suporta geolocalizacao.");
+      toast.error("Seu aparelho não suporta geolocalização.");
       return;
     }
 
@@ -350,7 +350,7 @@ export default function DriverPanel() {
       },
       () => {
         setCapturingGeoByDelivery((prev) => ({ ...prev, [deliveryId]: false }));
-        toast.error("Nao foi possivel capturar sua localizacao.");
+        toast.error("Não foi possível capturar sua localização.");
       },
       {
         enableHighAccuracy: true,
@@ -418,7 +418,7 @@ export default function DriverPanel() {
     if (deliveryError) throw deliveryError;
 
     if (nextStatus === "delivered" && confirmationCode !== currentDelivery.confirmation_code) {
-      throw new Error("Codigo de confirmacao invalido.");
+      throw new Error("Código de confirmação inválido.");
     }
 
     const { error } = await (supabase as any)
@@ -531,7 +531,7 @@ export default function DriverPanel() {
       queryClient.invalidateQueries({ queryKey: ["driver-profile", user?.id] });
       toast.success("Seu status foi atualizado.");
     },
-    onError: (error: any) => toast.error(error.message || "Nao foi possivel atualizar seu status."),
+    onError: (error: any) => toast.error(error.message || "Não foi possível atualizar seu status."),
   });
 
   const updateDeliveryMutation = useMutation({
@@ -554,7 +554,7 @@ export default function DriverPanel() {
     }) => {
       if (!isOnline) {
         if (nextStatus === "delivered") {
-          throw new Error("Para concluir e enviar prova de entrega, voce precisa estar online.");
+          throw new Error("Para concluir e enviar prova de entrega, você precisa estar online.");
         }
 
         enqueueOfflineAction({
@@ -613,7 +613,7 @@ export default function DriverPanel() {
       }
       toast.success("Entrega atualizada.");
     },
-    onError: (error: any) => toast.error(error.message || "Nao foi possivel atualizar a entrega."),
+    onError: (error: any) => toast.error(error.message || "Não foi possível atualizar a entrega."),
   });
 
   const reportIssueMutation = useMutation({
@@ -636,7 +636,7 @@ export default function DriverPanel() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Ocorrencia registrada.");
     },
-    onError: (error: any) => toast.error(error.message || "Nao foi possivel registrar a ocorrencia."),
+    onError: (error: any) => toast.error(error.message || "Não foi possível registrar a ocorrência."),
   });
 
   useEffect(() => {
@@ -777,7 +777,7 @@ export default function DriverPanel() {
             <div className="flex items-center gap-2">
               {isOnline ? <Wifi className="h-4 w-4 text-emerald-600" /> : <WifiOff className="h-4 w-4 text-amber-700" />}
               <span className="font-medium">
-                {isOnline ? "Conexao ativa. Dados sincronizados em tempo real." : "Sem internet. Exibindo ultimas corridas salvas neste aparelho."}
+                {isOnline ? "Conexão ativa. Dados sincronizados em tempo real." : "Sem internet. Exibindo últimas corridas salvas neste aparelho."}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -1001,6 +1001,25 @@ export default function DriverPanel() {
                       )}
 
                       {["accepted", "picked_up"].includes(delivery.status) && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={reportIssueMutation.isPending}
+                          onClick={() => {
+                            const reason = window.prompt("O que aconteceu nessa entrega? Ex.: cliente ausente, endereço errado...");
+                            if (!reason?.trim()) return;
+                            reportIssueMutation.mutate({
+                              deliveryId: delivery.id,
+                              issueReason: `[Tentativa sem sucesso] ${reason.trim()}`,
+                            });
+                          }}
+                        >
+                          Não consegui entregar
+                        </Button>
+                      )}
+
+                      {["accepted", "picked_up"].includes(delivery.status) && (
                         <div className="w-full rounded-lg border p-3 bg-muted/20 space-y-2">
                           <p className="text-xs text-muted-foreground">Prova de entrega (foto)</p>
                           <Input
@@ -1033,7 +1052,7 @@ export default function DriverPanel() {
                             </Button>
                             {geoByDelivery[delivery.id] && (
                               <p className={`text-xs ${geoByDelivery[delivery.id]!.accuracy > MIN_GEO_ACCURACY_METERS ? "text-destructive" : "text-muted-foreground"}`}>
-                                GPS: precisao {Math.round(geoByDelivery[delivery.id]!.accuracy)}m
+                                GPS: precisão {Math.round(geoByDelivery[delivery.id]!.accuracy)}m
                               </p>
                             )}
                           </div>

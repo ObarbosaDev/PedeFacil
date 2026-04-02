@@ -1,4 +1,4 @@
-﻿-- Client accounts and personalization
+-- Client accounts and personalization
 DO $$
 BEGIN
   IF NOT EXISTS (

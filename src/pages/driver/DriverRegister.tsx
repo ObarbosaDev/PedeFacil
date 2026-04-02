@@ -174,16 +174,21 @@ export default function DriverRegister() {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={submitting}>
+          <Button
+            type="submit"
+            className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={submitting}
+            aria-busy={submitting}
+          >
             {submitting ? "Criando..." : "Criar conta"}
             {!submitting && <UserPlus className="h-4 w-4 ml-2" />}
           </Button>
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-300">
+      <p className="text-center text-sm text-zinc-300 leading-relaxed">
         Já tem conta?{" "}
-        <Link to="/entregador/login" className="text-orange-400 font-semibold hover:text-orange-300 hover:underline inline-flex items-center gap-1">
+        <Link to="/entregador/login" className="text-zinc-100 font-semibold hover:text-white hover:underline inline-flex items-center gap-1">
           Entrar
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
