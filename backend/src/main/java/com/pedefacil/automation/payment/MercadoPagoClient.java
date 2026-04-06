@@ -13,10 +13,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class MercadoPagoClient {
+  private static final Logger log = LoggerFactory.getLogger(MercadoPagoClient.class);
 
   private final PaymentsProperties properties;
   private final ObjectMapper objectMapper;
@@ -29,7 +33,7 @@ public class MercadoPagoClient {
   }
 
   public PreferenceResponse createPreference(CreatePreferenceInput input) {
-    String accessToken = required(properties.getMercadopagoAccessToken(), "MERCADOPAGO_ACCESS_TOKEN");
+    String accessToken = resolveAccessToken(input.getAccessTokenOverride());
     String apiBaseUrl = safeBaseUrl(properties.getMercadopagoApiBaseUrl());
 
     Map<String, Object> body = new LinkedHashMap<>();
@@ -37,8 +41,8 @@ public class MercadoPagoClient {
     body.put("notification_url", input.getWebhookUrl());
 
     Map<String, Object> item = new LinkedHashMap<>();
-    item.put("id", "plano-" + input.getPlanSlug());
-    item.put("title", "Assinatura Pede Facil - " + capitalize(input.getPlanSlug()));
+    item.put("id", input.getItemId());
+    item.put("title", input.getTitle());
     item.put("quantity", 1);
     item.put("currency_id", "BRL");
     item.put("unit_price", input.getAmountReais());
@@ -52,9 +56,27 @@ public class MercadoPagoClient {
 
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("checkout_session_id", input.getCheckoutSessionId());
-    metadata.put("plan_slug", input.getPlanSlug());
-    metadata.put("billing_cycle", input.getBillingCycle());
+    metadata.putAll(input.getMetadata());
     body.put("metadata", metadata);
+
+    if (input.getPaymentMethod() != null) {
+      Map<String, Object> paymentMethods = new LinkedHashMap<>();
+      if ("pix".equalsIgnoreCase(input.getPaymentMethod())) {
+        paymentMethods.put("excluded_payment_types", new Object[] {
+            Map.of("id", "credit_card"),
+            Map.of("id", "debit_card"),
+            Map.of("id", "ticket"),
+            Map.of("id", "atm")
+        });
+      } else if ("card".equalsIgnoreCase(input.getPaymentMethod())) {
+        paymentMethods.put("excluded_payment_types", new Object[] {
+            Map.of("id", "bank_transfer"),
+            Map.of("id", "ticket"),
+            Map.of("id", "atm")
+        });
+      }
+      body.put("payment_methods", paymentMethods);
+    }
 
     HttpRequest request = HttpRequest.newBuilder(URI.create(apiBaseUrl + "/checkout/preferences"))
         .timeout(Duration.ofSeconds(20))
@@ -76,8 +98,20 @@ public class MercadoPagoClient {
     return new PreferenceResponse(preferenceId, initPoint);
   }
 
+  public PreferenceResponse createPlanPreference(CreatePreferenceInput input) {
+    return createPreference(input);
+  }
+
+  public PreferenceResponse createOrderPreference(CreatePreferenceInput input) {
+    return createPreference(input);
+  }
+
   public PaymentInfo getPayment(String paymentId) {
-    String accessToken = required(properties.getMercadopagoAccessToken(), "MERCADOPAGO_ACCESS_TOKEN");
+    return getPayment(paymentId, null);
+  }
+
+  public PaymentInfo getPayment(String paymentId, String accessTokenOverride) {
+    String accessToken = resolveAccessToken(accessTokenOverride);
     String apiBaseUrl = safeBaseUrl(properties.getMercadopagoApiBaseUrl());
 
     HttpRequest request = HttpRequest.newBuilder(URI.create(apiBaseUrl + "/v1/payments/" + paymentId))
@@ -97,20 +131,49 @@ public class MercadoPagoClient {
   }
 
   private JsonNode sendJson(HttpRequest request, String operation) {
-    try {
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      int statusCode = response.statusCode();
-      if (statusCode < 200 || statusCode >= 300) {
-        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-            operation + " falhou. Status: " + statusCode + " Body: " + response.body());
+    int maxAttempts = safePositive(properties.getMercadopagoRetryMaxAttempts(), 3);
+    int baseDelayMs = safePositive(properties.getMercadopagoRetryBaseDelayMs(), 250);
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        int statusCode = response.statusCode();
+        if (statusCode >= 200 && statusCode < 300) {
+          return objectMapper.readTree(response.body());
+        }
+
+        String bodySnippet = response.body() == null ? "" : response.body();
+        if (bodySnippet.length() > 220) {
+          bodySnippet = bodySnippet.substring(0, 220);
+        }
+        boolean retryable = isRetryableStatus(statusCode);
+        log.warn(
+            "{} retornou status {} (tentativa {}/{}). Body resumido: {}",
+            operation,
+            statusCode,
+            attempt,
+            maxAttempts,
+            bodySnippet);
+
+        if (!retryable || attempt == maxAttempts) {
+          throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+              operation + " falhou com o provedor de pagamento. Tente novamente.");
+        }
+
+        sleepBackoff(attempt, baseDelayMs);
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " interrompido", ex);
+      } catch (IOException ex) {
+        if (attempt == maxAttempts) {
+          throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " falhou na comunicacao", ex);
+        }
+        log.warn("{} com falha de comunicacao (tentativa {}/{}).", operation, attempt, maxAttempts);
+        sleepBackoff(attempt, baseDelayMs);
       }
-      return objectMapper.readTree(response.body());
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " interrompido", ex);
-    } catch (IOException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " falhou na comunicacao", ex);
     }
+    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+        operation + " falhou com o provedor de pagamento.");
   }
 
   private String writeJson(Object body) {
@@ -136,6 +199,13 @@ public class MercadoPagoClient {
     return value.trim();
   }
 
+  private String resolveAccessToken(String accessTokenOverride) {
+    if (StringUtils.hasText(accessTokenOverride)) {
+      return accessTokenOverride.trim();
+    }
+    return required(properties.getMercadopagoAccessToken(), "MERCADOPAGO_ACCESS_TOKEN");
+  }
+
   private String safeBaseUrl(String value) {
     String normalized = required(value, "MERCADOPAGO_API_BASE_URL");
     if (normalized.endsWith("/")) return normalized.substring(0, normalized.length() - 1);
@@ -151,45 +221,68 @@ public class MercadoPagoClient {
     return value == null || value.isBlank();
   }
 
+  private boolean isRetryableStatus(int statusCode) {
+    return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+  }
+
+  private void sleepBackoff(int attempt, int baseDelayMs) throws InterruptedException {
+    long delay = (long) baseDelayMs * attempt;
+    Thread.sleep(Math.min(delay, 2000L));
+  }
+
+  private int safePositive(Integer value, int fallback) {
+    if (value == null || value <= 0) return fallback;
+    return value;
+  }
+
   public static class CreatePreferenceInput {
     private final String checkoutSessionId;
-    private final String planSlug;
-    private final String billingCycle;
+    private final String itemId;
+    private final String title;
     private final BigDecimal amountReais;
     private final String webhookUrl;
     private final String successUrl;
     private final String pendingUrl;
     private final String failureUrl;
+    private final String paymentMethod;
+    private final Map<String, Object> metadata;
+    private final String accessTokenOverride;
 
     public CreatePreferenceInput(
         String checkoutSessionId,
-        String planSlug,
-        String billingCycle,
+        String itemId,
+        String title,
         BigDecimal amountReais,
         String webhookUrl,
         String successUrl,
         String pendingUrl,
-        String failureUrl) {
+        String failureUrl,
+        String paymentMethod,
+        Map<String, Object> metadata,
+        String accessTokenOverride) {
       this.checkoutSessionId = checkoutSessionId;
-      this.planSlug = planSlug;
-      this.billingCycle = billingCycle;
+      this.itemId = itemId;
+      this.title = title;
       this.amountReais = amountReais;
       this.webhookUrl = webhookUrl;
       this.successUrl = successUrl;
       this.pendingUrl = pendingUrl;
       this.failureUrl = failureUrl;
+      this.paymentMethod = paymentMethod;
+      this.metadata = metadata == null ? Map.of() : metadata;
+      this.accessTokenOverride = accessTokenOverride;
     }
 
     public String getCheckoutSessionId() {
       return checkoutSessionId;
     }
 
-    public String getPlanSlug() {
-      return planSlug;
+    public String getItemId() {
+      return itemId;
     }
 
-    public String getBillingCycle() {
-      return billingCycle;
+    public String getTitle() {
+      return title;
     }
 
     public BigDecimal getAmountReais() {
@@ -210,6 +303,18 @@ public class MercadoPagoClient {
 
     public String getFailureUrl() {
       return failureUrl;
+    }
+
+    public String getPaymentMethod() {
+      return paymentMethod;
+    }
+
+    public Map<String, Object> getMetadata() {
+      return metadata;
+    }
+
+    public String getAccessTokenOverride() {
+      return accessTokenOverride;
     }
   }
 

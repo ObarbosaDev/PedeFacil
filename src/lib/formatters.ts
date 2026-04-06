@@ -49,3 +49,17 @@ export const ORDER_STATUS_COLORS: Record<string, string> = {
   delivered: "bg-muted text-muted-foreground",
   cancelled: "bg-destructive/10 text-destructive",
 };
+
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  pix: "PIX",
+  credit_card: "Cartão de crédito",
+  debit_card: "Cartão de débito",
+  cash: "Dinheiro",
+  meal_voucher: "Vale-alimentação",
+};
+
+export function getDeliveryOperationModeLabel(mode?: string | null): string {
+  if (mode === "shared_fleet") return "Base compartilhada";
+  if (mode === "hybrid") return "Modo híbrido";
+  return "Entrega própria";
+}

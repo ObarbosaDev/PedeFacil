@@ -12,6 +12,12 @@ public class PaymentsProperties {
   private String mercadopagoWebhookToken;
   private String supabaseUrl;
   private String supabaseServiceRoleKey;
+  private Integer checkoutRateLimitMax = 20;
+  private Integer checkoutRateLimitWindowSeconds = 60;
+  private Integer revalidateRateLimitMax = 30;
+  private Integer revalidateRateLimitWindowSeconds = 60;
+  private Integer mercadopagoRetryMaxAttempts = 3;
+  private Integer mercadopagoRetryBaseDelayMs = 250;
 
   public String getApiPublicBaseUrl() {
     return apiPublicBaseUrl;
@@ -67,5 +73,53 @@ public class PaymentsProperties {
 
   public void setSupabaseServiceRoleKey(String supabaseServiceRoleKey) {
     this.supabaseServiceRoleKey = supabaseServiceRoleKey;
+  }
+
+  public Integer getCheckoutRateLimitMax() {
+    return checkoutRateLimitMax;
+  }
+
+  public void setCheckoutRateLimitMax(Integer checkoutRateLimitMax) {
+    this.checkoutRateLimitMax = checkoutRateLimitMax;
+  }
+
+  public Integer getCheckoutRateLimitWindowSeconds() {
+    return checkoutRateLimitWindowSeconds;
+  }
+
+  public void setCheckoutRateLimitWindowSeconds(Integer checkoutRateLimitWindowSeconds) {
+    this.checkoutRateLimitWindowSeconds = checkoutRateLimitWindowSeconds;
+  }
+
+  public Integer getRevalidateRateLimitMax() {
+    return revalidateRateLimitMax;
+  }
+
+  public void setRevalidateRateLimitMax(Integer revalidateRateLimitMax) {
+    this.revalidateRateLimitMax = revalidateRateLimitMax;
+  }
+
+  public Integer getRevalidateRateLimitWindowSeconds() {
+    return revalidateRateLimitWindowSeconds;
+  }
+
+  public void setRevalidateRateLimitWindowSeconds(Integer revalidateRateLimitWindowSeconds) {
+    this.revalidateRateLimitWindowSeconds = revalidateRateLimitWindowSeconds;
+  }
+
+  public Integer getMercadopagoRetryMaxAttempts() {
+    return mercadopagoRetryMaxAttempts;
+  }
+
+  public void setMercadopagoRetryMaxAttempts(Integer mercadopagoRetryMaxAttempts) {
+    this.mercadopagoRetryMaxAttempts = mercadopagoRetryMaxAttempts;
+  }
+
+  public Integer getMercadopagoRetryBaseDelayMs() {
+    return mercadopagoRetryBaseDelayMs;
+  }
+
+  public void setMercadopagoRetryBaseDelayMs(Integer mercadopagoRetryBaseDelayMs) {
+    this.mercadopagoRetryBaseDelayMs = mercadopagoRetryBaseDelayMs;
   }
 }

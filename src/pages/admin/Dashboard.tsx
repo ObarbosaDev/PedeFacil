@@ -1,11 +1,11 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import StatsCard from "@/components/dashboard/StatsCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
-import { ClipboardList, DollarSign, TrendingUp, ArrowRight, Sparkles, PackageCheck, CalendarDays, Trophy } from "lucide-react";
+import { ClipboardList, DollarSign, TrendingUp, ArrowRight, Sparkles, PackageCheck, CalendarDays, Trophy, CreditCard, Bike, WalletCards } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,7 +102,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, total, status, created_at, customer_name, customer_phone, order_type")
+        .select("id, total, subtotal, discount_amount, delivery_fee, service_fee, payment_status, payment_method, status, created_at, customer_name, customer_phone, order_type")
         .eq("establishment_id", establishment!.id)
         .gte("created_at", periodStartIso)
         .order("created_at", { ascending: false });
@@ -119,6 +119,19 @@ export default function Dashboard() {
         .select("product_name, quantity, unit_price, orders!inner(created_at, establishment_id, status)")
         .eq("orders.establishment_id", establishment!.id)
         .gte("orders.created_at", periodStartIso);
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: periodDeliveries = [] } = useQuery({
+    queryKey: ["dashboard-period-deliveries", establishment?.id, periodStartIso],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("order_deliveries")
+        .select("order_id, payout_amount, payout_status, created_at, delivered_at, status")
+        .eq("establishment_id", establishment!.id)
+        .gte("created_at", periodStartIso);
       return data || [];
     },
     enabled: !!establishment,
@@ -256,6 +269,37 @@ export default function Dashboard() {
       topProducts,
     };
   }, [periodOrders, periodItems]);
+
+  const executiveFinance = useMemo(() => {
+    const paidOrders = (periodOrders as any[]).filter((order) => order.payment_status === "paid");
+    const digitalPendingOrders = (periodOrders as any[]).filter((order) =>
+      order.payment_status !== "paid" && ["pix", "credit_card", "debit_card"].includes(String(order.payment_method || ""))
+    );
+    const grossPaid = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const deliveryFees = paidOrders.reduce((sum, order) => sum + Number(order.delivery_fee || 0), 0);
+    const serviceFees = paidOrders.reduce((sum, order) => sum + Number(order.service_fee || 0), 0);
+    const platformFeePercent = Number((establishment as any)?.platform_fee_percent || 0);
+    const platformFeeAmount = grossPaid * (platformFeePercent / 100);
+    const driverPayout = (periodDeliveries as any[]).reduce((sum, row) => sum + Number(row.payout_amount || 0), 0);
+    const driverPayoutPending = (periodDeliveries as any[]).reduce(
+      (sum, row) => sum + (row.payout_status === "paid" ? 0 : Number(row.payout_amount || 0)),
+      0
+    );
+    const estimatedNet = grossPaid - platformFeeAmount - driverPayout;
+
+    return {
+      grossPaid,
+      deliveryFees,
+      serviceFees,
+      paidOrdersCount: paidOrders.length,
+      digitalPendingOrders: digitalPendingOrders.length,
+      platformFeePercent,
+      platformFeeAmount,
+      driverPayout,
+      driverPayoutPending,
+      estimatedNet,
+    };
+  }, [establishment, periodDeliveries, periodOrders]);
 
   const funnel = useMemo(() => {
     const menuSessions = new Set<string>();
@@ -479,7 +523,7 @@ export default function Dashboard() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <p className="text-xs uppercase tracking-wider opacity-90">Painel do lojista</p>
-              <h1 className="text-3xl md:text-4xl font-black mt-1">Resumo do seu negócio em tempo real</h1>
+              <h1 className="text-3xl md:text-4xl font-black mt-1">Resumo do seu negócio, ao vivo</h1>
               <p className="mt-2 opacity-90">
                 {establishment?.name
                   ? `Tudo centralizado para você tocar a operação da ${establishment.name}.`
@@ -516,8 +560,87 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard title="Pedidos no total" value={orders.length} icon={ClipboardList} className="border-primary/20" />
         <StatsCard title="Pedidos hoje" value={todayOrders.length} icon={TrendingUp} className="border-orange-300/40" />
-        <StatsCard title="Faturamento hoje" value={formatCurrency(todayRevenue)} icon={DollarSign} className="border-emerald-300/40" />
-        <StatsCard title="Em andamento" value={inProgress} icon={PackageCheck} description="Acompanhando o fluxo" className="border-blue-300/40" />
+        <StatsCard title="Faturamento de hoje" value={formatCurrency(todayRevenue)} icon={DollarSign} className="border-emerald-300/40" />
+        <StatsCard title="Em andamento" value={inProgress} icon={PackageCheck} description="Operação rolando" className="border-blue-300/40" />
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <Card className="xl:col-span-2 border-emerald-300/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <WalletCards className="h-5 w-5 text-emerald-600" />
+              Resumo executivo financeiro
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Bruto pago</p>
+              <p className="text-2xl font-bold">{formatCurrency(executiveFinance.grossPaid)}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Líquido estimado</p>
+              <p className="text-2xl font-bold">{formatCurrency(executiveFinance.estimatedNet)}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Taxa plataforma</p>
+              <p className="text-lg font-bold">{formatCurrency(executiveFinance.platformFeeAmount)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{executiveFinance.platformFeePercent.toFixed(0)}% no período</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Repasse da frota</p>
+              <p className="text-lg font-bold">{formatCurrency(executiveFinance.driverPayout)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Pendente: {formatCurrency(executiveFinance.driverPayoutPending)}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CreditCard className="h-5 w-5 text-primary" />
+              Cobrança digital
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Pedidos pagos</p>
+              <p className="text-2xl font-bold">{executiveFinance.paidOrdersCount}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Pendentes digitais</p>
+              <p className="text-2xl font-bold">{executiveFinance.digitalPendingOrders}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-orange-300/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Bike className="h-5 w-5 text-orange-600" />
+              Repasse dos entregadores
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Pendente</p>
+              <p className="text-2xl font-bold">{formatCurrency(executiveFinance.driverPayoutPending)}</p>
+            </div>
+            <Link to="/admin/entregadores">
+              <Button variant="outline" className="w-full">Abrir repasses</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-300/40">
+          <CardHeader>
+            <CardTitle className="text-base">Leitura rápida</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>Frete cobrado: <span className="font-semibold text-foreground">{formatCurrency(executiveFinance.deliveryFees)}</span></p>
+            <p>Taxa de serviço: <span className="font-semibold text-foreground">{formatCurrency(executiveFinance.serviceFees)}</span></p>
+            <p>Se pintar cobrança pendente e pedido travado, vale olhar o ledger antes de mexer na mão.</p>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -537,7 +660,7 @@ export default function Dashboard() {
                 action={() => window.location.reload()}
               />
             ) : orders.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">Ainda não caiu nenhum pedido por aqui.</p>
+              <p className="text-muted-foreground text-center py-8">Ainda não caiu pedido por aqui.</p>
             ) : (
               <div className="space-y-3">
                 {orders.slice(0, 6).map((order) => (

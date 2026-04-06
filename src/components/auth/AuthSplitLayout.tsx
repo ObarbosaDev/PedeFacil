@@ -97,6 +97,12 @@ export function AuthSplitLayout({
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-[#efeee9] auth-stage">
+      <a
+        href="#auth-main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-zinc-900 focus:text-zinc-100 focus:px-4 focus:py-2 focus:rounded-md"
+      >
+        Ir para o conteúdo principal
+      </a>
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(148,163,184,0.22),transparent_34%),radial-gradient(circle_at_86%_20%,rgba(16,185,129,0.12),transparent_34%),radial-gradient(circle_at_48%_88%,rgba(249,115,22,0.10),transparent_36%)]" />
         <div className="absolute -top-24 -left-20 h-80 w-80 rounded-full bg-zinc-300/25 blur-3xl" />
@@ -131,7 +137,7 @@ export function AuthSplitLayout({
           </div>
         </section>
 
-        <section className="flex items-center justify-center p-6 sm:p-8">
+        <main id="auth-main-content" className="flex items-center justify-center p-6 sm:p-8">
           <Card className="w-full max-w-md border-zinc-800/90 bg-zinc-950/95 backdrop-blur text-zinc-100 shadow-[0_36px_110px_-56px_rgba(0,0,0,0.95)] relative overflow-hidden ring-1 ring-white/5 auth-form-card">
             <div className={`h-1.5 w-full bg-gradient-to-r ${formToneStyles.bar}`} />
             <div className={`absolute inset-0 pointer-events-none ${formToneStyles.overlay}`} />
@@ -188,7 +194,7 @@ export function AuthSplitLayout({
               {footer ? <div className="mt-6">{footer}</div> : null}
             </CardContent>
           </Card>
-        </section>
+        </main>
       </div>
     </div>
   );

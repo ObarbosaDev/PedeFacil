@@ -79,6 +79,18 @@
       "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
     },
     {
+      "name": "payments.checkout-rate-limit-max",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 20
+    },
+    {
+      "name": "payments.checkout-rate-limit-window-seconds",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 60
+    },
+    {
       "name": "payments.mercadopago-access-token",
       "type": "java.lang.String",
       "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
@@ -93,6 +105,18 @@
       "name": "payments.mercadopago-webhook-token",
       "type": "java.lang.String",
       "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"
+    },
+    {
+      "name": "payments.revalidate-rate-limit-max",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 30
+    },
+    {
+      "name": "payments.revalidate-rate-limit-window-seconds",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 60
     },
     {
       "name": "payments.supabase-service-role-key",

@@ -1,4 +1,4 @@
-export function getFriendlyAuthError(error: unknown) {
+﻿export function getFriendlyAuthError(error: unknown) {
   const extractMessage = () => {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;

@@ -1,4 +1,4 @@
-﻿import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
@@ -44,7 +44,7 @@ export default function CartDrawer({ open, onClose, establishmentSlug }: CartDra
           <div className="flex-1 flex items-center justify-center text-center px-4">
             <div>
               <p className="font-bold">Ainda está vazio por aqui.</p>
-              <p className="text-muted-foreground text-sm mt-1">Escolha seus favoritos e volte para fechar o pedido.</p>
+              <p className="text-muted-foreground text-sm mt-1">Escolha seus favoritos e volte para fechar tudo sem pressa.</p>
             </div>
           </div>
         ) : (
@@ -94,7 +94,7 @@ export default function CartDrawer({ open, onClose, establishmentSlug }: CartDra
                 <span className="text-primary">{formatCurrency(total)}</span>
               </div>
               <Button className="w-full rounded-full h-11" size="lg" onClick={handleCheckout}>
-                Fechar pedido
+                Ir para checkout
               </Button>
             </div>
           </SheetFooter>

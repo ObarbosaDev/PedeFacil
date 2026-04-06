@@ -108,6 +108,8 @@ export default function StoreSettings() {
     busyPauseMinutes: "30",
     busyMessage: "Loja lotada agora. Novos pedidos em breve.",
     acceptsScheduledOrders: true,
+    acceptingOrdersNow: true,
+    closedMessage: "Loja fechada no momento. Se quiser, já deixa agendado para amanhã.",
   });
 
   const [initialized, setInitialized] = useState(false);
@@ -126,6 +128,9 @@ export default function StoreSettings() {
       busyPauseMinutes: "30",
       busyMessage: (establishment as any).busy_message || "Loja lotada agora. Novos pedidos em breve.",
       acceptsScheduledOrders: (establishment as any).accepts_scheduled_orders !== false,
+      acceptingOrdersNow: (establishment as any).accepting_orders_now !== false,
+      closedMessage:
+        (establishment as any).closed_message || "Loja fechada no momento. Se quiser, já deixa agendado para amanhã.",
     });
   }
 
@@ -294,6 +299,8 @@ export default function StoreSettings() {
           busy_pause_until: pauseUntil,
           busy_message: busyForm.busyMessage.trim() || null,
           accepts_scheduled_orders: busyForm.acceptsScheduledOrders,
+          accepting_orders_now: busyForm.acceptingOrdersNow,
+          closed_message: busyForm.closedMessage.trim() || null,
         })
         .eq("id", establishment.id);
       if (error) throw error;
@@ -553,6 +560,19 @@ export default function StoreSettings() {
             <div className="rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
+                  <p className="font-semibold">Loja aberta para pedido imediato</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quando desligar, o cliente não compra na hora e só consegue agendar para amanhã.
+                  </p>
+                </div>
+                <Switch
+                  checked={busyForm.acceptingOrdersNow}
+                  onCheckedChange={(checked) => setBusyForm((prev) => ({ ...prev, acceptingOrdersNow: checked }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div>
                   <p className="font-semibold">Loja lotada</p>
                   <p className="text-xs text-muted-foreground">
                     Pausa pedidos imediatos por alguns minutos e mantém pedidos agendados.
@@ -588,6 +608,15 @@ export default function StoreSettings() {
                   value={busyForm.busyMessage}
                   onChange={(e) => setBusyForm((prev) => ({ ...prev, busyMessage: e.target.value }))}
                   placeholder="Loja lotada agora. Novos pedidos em breve."
+                />
+              </div>
+
+              <div>
+                <Label>Mensagem quando a loja estiver fechada</Label>
+                <Textarea
+                  value={busyForm.closedMessage}
+                  onChange={(e) => setBusyForm((prev) => ({ ...prev, closedMessage: e.target.value }))}
+                  placeholder="Loja fechada no momento. Se quiser, já deixa agendado para amanhã."
                 />
               </div>
 

@@ -9,7 +9,8 @@ export type PlanFeature =
   | "coupons"
   | "drivers"
   | "automations"
-  | "loyalty";
+  | "loyalty"
+  | "support";
 
 const FEATURES_BY_PLAN: Record<PlanSlug, PlanFeature[]> = {
   essencial: ["dashboard", "orders", "products", "categories", "store"],
@@ -24,6 +25,7 @@ const FEATURES_BY_PLAN: Record<PlanSlug, PlanFeature[]> = {
     "drivers",
     "automations",
     "loyalty",
+    "support",
   ],
 };
 
@@ -37,6 +39,7 @@ const FEATURE_REQUIRED_PLAN: Record<PlanFeature, PlanSlug> = {
   drivers: "profissional",
   automations: "premium",
   loyalty: "premium",
+  support: "premium",
 };
 
 export function hasPlanFeature(plan: PlanSlug | undefined | null, feature: PlanFeature): boolean {
@@ -58,6 +61,7 @@ export function getRequiredFeatureForAdminPath(pathname: string): PlanFeature {
   if (pathname.startsWith("/admin/entregadores")) return "drivers";
   if (pathname.startsWith("/admin/automacoes")) return "automations";
   if (pathname.startsWith("/admin/fidelidade")) return "loyalty";
+  if (pathname.startsWith("/admin/suporte")) return "support";
   if (pathname.startsWith("/admin/go-live")) return "dashboard";
   return "dashboard";
 }

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,7 +233,7 @@ export default function PublicMenu() {
                 Escolhe no seu ritmo e monta o pedido sem estresse.
               </h2>
               <p className="mt-2 text-muted-foreground">
-                Cardápio atualizado, preços claros e finalização rápida no WhatsApp.
+                Cardápio atualizado, preço claro e um caminho simples para fechar seu pedido.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -249,7 +249,7 @@ export default function PublicMenu() {
           <section className="space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-2xl font-black">Destaques da casa</h2>
-              <Badge variant="secondary" className="rounded-full">Pra pedir rapidinho</Badge>
+              <Badge variant="secondary" className="rounded-full">Pra pedir sem pensar duas vezes</Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {featuredProducts.map((product: any) => (

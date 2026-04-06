@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +22,7 @@ import {
   updateSecuritySettings,
 } from "@/lib/account-security";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, Plus, Repeat2, Trash2, User } from "lucide-react";
+import { ArrowLeft, Clock3, CreditCard, Lock, MapPin, Plus, Repeat2, ShieldCheck, ShoppingBag, Trash2, User } from "lucide-react";
 
 type CustomerProfile = {
   id: string;
@@ -54,6 +54,7 @@ type OrderHistoryRow = {
     id: string;
     created_at: string;
     status: string;
+    payment_status: string;
     order_type: "pickup" | "delivery";
     subtotal: number;
     discount_amount: number;
@@ -87,6 +88,10 @@ const emptyAddress = {
   reference: "",
 };
 
+function getOrderTypeLabel(orderType: "pickup" | "delivery") {
+  return orderType === "delivery" ? "Entrega" : "Retirada";
+}
+
 export default function ClientAccount() {
   const { user, loading, signOut, updatePassword } = useAuth();
   const navigate = useNavigate();
@@ -95,6 +100,8 @@ export default function ClientAccount() {
 
   const [profileForm, setProfileForm] = useState({ fullName: "", phone: "" });
   const [addressForm, setAddressForm] = useState(emptyAddress);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState("all");
   const [passwordForm, setPasswordForm] = useState({
     newPassword: "",
     confirmNewPassword: "",
@@ -147,6 +154,7 @@ export default function ClientAccount() {
             id,
             created_at,
             status,
+            payment_status,
             order_type,
             subtotal,
             discount_amount,
@@ -188,6 +196,38 @@ export default function ClientAccount() {
     enabled: !!user,
   });
 
+  const filteredOrderHistory = useMemo(() => {
+    const term = historySearch.trim().toLowerCase();
+    return orderHistory.filter((row) => {
+      const order = row.orders;
+      const store = order?.establishments;
+      if (!order || !store) return false;
+      if (historyStatusFilter !== "all" && order.status !== historyStatusFilter) return false;
+      if (!term) return true;
+      return (
+        String(store.name || "").toLowerCase().includes(term) ||
+        String(order.id || "").toLowerCase().includes(term) ||
+        String(order.order_type || "").toLowerCase().includes(term) ||
+        String(order.payment_status || "").toLowerCase().includes(term)
+      );
+    });
+  }, [historySearch, historyStatusFilter, orderHistory]);
+
+  const activeOrder = useMemo(() => {
+    return orderHistory.find((row) => row.orders && !["delivered", "cancelled"].includes(String(row.orders.status || ""))) || null;
+  }, [orderHistory]);
+
+  const accountMetrics = useMemo(() => {
+    const paidOrders = orderHistory.filter((row) => row.orders?.payment_status === "paid").length;
+    const totalSpent = orderHistory.reduce((sum, row) => sum + Number(row.orders?.total || 0), 0);
+    return {
+      orders: orderHistory.length,
+      paidOrders,
+      addresses: addresses.length,
+      totalSpent,
+    };
+  }, [addresses.length, orderHistory]);
+
   useEffect(() => {
     if (!profile) return;
     setProfileForm({
@@ -227,7 +267,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-profile", user?.id] });
       toast.success("Perfil salvo com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "Não rolou salvar o perfil."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar seu perfil."),
   });
 
   const saveAddressMutation = useMutation({
@@ -333,7 +373,7 @@ export default function ClientAccount() {
       const store = order?.establishments;
 
       if (!order || !store?.slug) {
-        throw new Error("Não rolou refazer este pedido agora.");
+        throw new Error("Não rolou refazer esse pedido agora.");
       }
 
       const ids = (order.order_items || [])
@@ -341,7 +381,7 @@ export default function ClientAccount() {
         .filter((id): id is string => !!id);
 
       if (!ids.length) {
-        throw new Error("Este pedido não tem itens disponíveis para recompra.");
+        throw new Error("Esse pedido não tem itens disponíveis para recompra.");
       }
 
       const { data: products, error } = await supabase
@@ -401,7 +441,7 @@ export default function ClientAccount() {
       });
 
       if (unavailableCount > 0) {
-        toast.success(`Recompra pronta. ${unavailableCount} item(ns) não estavam disponíveis e foram removidos.`);
+        toast.success(`Recompra pronta. ${unavailableCount} item(ns) não estavam disponíveis e saíram do carrinho.`);
       } else {
         toast.success("Recompra pronta. Seu carrinho foi preenchido.");
       }
@@ -462,7 +502,7 @@ export default function ClientAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
-      toast.success("Este dispositivo foi adicionado como confiável.");
+      toast.success("Este dispositivo foi adicionado como confiavel.");
     },
     onError: (error: any) => toast.error(error.message || "Não rolou confiar neste dispositivo."),
   });
@@ -471,7 +511,7 @@ export default function ClientAccount() {
     mutationFn: async (deviceId: string) => revokeTrustedDevice(user!.id, deviceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
-      toast.success("Dispositivo removido da lista de confiáveis.");
+      toast.success("Dispositivo removido da lista de confiaveis.");
     },
     onError: (error: any) => toast.error(error.message || "Não rolou remover o dispositivo."),
   });
@@ -479,8 +519,13 @@ export default function ClientAccount() {
   if (!loading && !user) return <Navigate to="/cliente/login" replace />;
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="min-h-screen bg-[#f3efe6]">
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <div className="absolute -top-24 right-0 h-96 w-96 rounded-full bg-orange-200/30 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-emerald-200/20 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(120deg,rgba(24,24,27,0.16)_1px,transparent_1px)] [background-size:22px_22px]" />
+      </div>
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Link to="/cliente">
             <Button variant="outline">
@@ -493,13 +538,106 @@ export default function ClientAccount() {
           </Button>
         </div>
 
-        <Card>
+        <section className="overflow-hidden rounded-[32px] border border-zinc-950/10 bg-[#111111] shadow-[0_28px_100px_rgba(15,23,42,0.18)]">
+          <div className="grid gap-0 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="p-6 md:p-8 text-white">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-300">
+                <ShoppingBag className="h-3.5 w-3.5" />
+                Painel do cliente
+              </div>
+              <h1 className="mt-4 text-3xl font-black tracking-tight md:text-4xl">
+                Sua conta pronta para pedir rápido, sem enrolação.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                Perfil salvo, endereço na mão, segurança redonda e histórico pronto para repetir pedido sem perder tempo.
+              </p>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Pedidos</p>
+                  <p className="mt-3 text-3xl font-black">{accountMetrics.orders}</p>
+                  <p className="mt-2 text-sm text-zinc-400">Histórico já registrado.</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Pagos</p>
+                  <p className="mt-3 text-3xl font-black">{accountMetrics.paidOrders}</p>
+                  <p className="mt-2 text-sm text-zinc-400">Compras com pagamento confirmado.</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Endereços</p>
+                  <p className="mt-3 text-3xl font-black">{accountMetrics.addresses}</p>
+                  <p className="mt-2 text-sm text-zinc-400">Pontos salvos para checkout.</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Total no app</p>
+                  <p className="mt-3 text-2xl font-black">{formatCurrency(accountMetrics.totalSpent)}</p>
+                  <p className="mt-2 text-sm text-zinc-400">Leitura rápida do seu uso.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6 md:p-8 xl:border-l xl:border-t-0">
+              <div className="rounded-[28px] border border-white/10 bg-black/20 p-5 text-white">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Pedido em destaque</p>
+                {activeOrder?.orders?.establishments ? (
+                  <>
+                    <h2 className="mt-3 text-2xl font-black tracking-tight">{activeOrder.orders.establishments.name}</h2>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {ORDER_STATUS_LABELS[activeOrder.orders.status] || activeOrder.orders.status} • {getOrderTypeLabel(activeOrder.orders.order_type)}
+                    </p>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">Total</p>
+                        <p className="mt-2 text-base font-bold">{formatCurrency(Number(activeOrder.orders.total || 0))}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">Criado em</p>
+                        <p className="mt-2 text-base font-bold">{formatDate(activeOrder.orders.created_at)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {activeOrder.orders.payment_status !== "paid" && (
+                        <Link to={`/cliente/pagamento-pedido?order=${activeOrder.orders.id}`}>
+                          <Button className="bg-white text-zinc-950 hover:bg-zinc-200">
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Pagar agora
+                          </Button>
+                        </Link>
+                      )}
+                      <Link to={`/loja/${activeOrder.orders.establishments.slug}`}>
+                        <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
+                          Ver loja
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="mt-3 text-2xl font-black tracking-tight">Conta pronta para o próximo pedido</h2>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Assim que você fechar uma compra, o pedido ativo aparece aqui com status e atalhos rápidos.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <a href="#perfil-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Perfil</a>
+          <a href="#enderecos-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Endereços</a>
+          <a href="#seguranca-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Segurança</a>
+          <a href="#historico-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Histórico</a>
+        </div>
+
+        <Card id="perfil-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
               Minha conta
             </CardTitle>
-            <CardDescription>Deixe seus dados salvos para comprar sem fricção.</CardDescription>
+            <CardDescription>Deixe seus dados salvos para comprar sem friccao.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
@@ -526,9 +664,9 @@ export default function ClientAccount() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="enderecos-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
-            <CardTitle>Endereços</CardTitle>
+            <CardTitle>Enderecos</CardTitle>
             <CardDescription>Cadastre seus endereços para o checkout preencher automático.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -542,7 +680,7 @@ export default function ClientAccount() {
                 <Input value={addressForm.street} onChange={(e) => setAddressForm((prev) => ({ ...prev, street: e.target.value }))} />
               </div>
               <div>
-                <Label>Número</Label>
+                <Label>Numero</Label>
                 <Input value={addressForm.number} onChange={(e) => setAddressForm((prev) => ({ ...prev, number: e.target.value }))} />
               </div>
               <div>
@@ -566,7 +704,7 @@ export default function ClientAccount() {
                 <Input value={addressForm.complement} onChange={(e) => setAddressForm((prev) => ({ ...prev, complement: e.target.value }))} />
               </div>
               <div>
-                <Label>Referência</Label>
+                <Label>Referencia</Label>
                 <Input value={addressForm.reference} onChange={(e) => setAddressForm((prev) => ({ ...prev, reference: e.target.value }))} />
               </div>
             </div>
@@ -584,7 +722,7 @@ export default function ClientAccount() {
                   <div key={address.id} className="rounded-lg border p-3 flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">
-                        {address.label} {address.is_default && <Badge className="ml-2">Padrão</Badge>}
+                        {address.label} {address.is_default && <Badge className="ml-2">Padrao</Badge>}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {address.street}, {address.number} - {address.neighborhood}
@@ -596,7 +734,7 @@ export default function ClientAccount() {
                     <div className="flex items-center gap-2">
                       {!address.is_default && (
                         <Button variant="outline" size="sm" onClick={() => setDefaultAddressMutation.mutate(address.id)}>
-                          Tornar padrão
+                          Tornar padrao
                         </Button>
                       )}
                       <Button variant="destructive" size="sm" onClick={() => deleteAddressMutation.mutate(address.id)}>
@@ -610,13 +748,13 @@ export default function ClientAccount() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="seguranca-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5 text-primary" />
               Segurança da conta
             </CardTitle>
-            <CardDescription>Atualize sua senha e controle camadas extras de proteção.</CardDescription>
+            <CardDescription>Atualize sua senha e deixe sua conta redonda, sem brecha boba.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -652,7 +790,7 @@ export default function ClientAccount() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">OTP no login</p>
-                  <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma acesso com código no e-mail.</p>
+                  <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma o acesso com código no e-mail.</p>
                 </div>
                 <Switch
                   checked={!!securitySettings?.otp_enabled}
@@ -663,7 +801,7 @@ export default function ClientAccount() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">Verificação extra para ações sensíveis</p>
-                  <p className="text-xs text-muted-foreground">Pede confirmação adicional quando você fizer alterações críticas.</p>
+                  <p className="text-xs text-muted-foreground">Pede uma confirmação a mais quando você mexer no que é crítico.</p>
                 </div>
                 <Switch
                   checked={!!securitySettings?.require_step_up_for_critical_actions}
@@ -687,7 +825,7 @@ export default function ClientAccount() {
               </div>
 
               {trustedDevices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum dispositivo confiável cadastrado.</p>
+                <p className="text-sm text-muted-foreground">Ainda não tem dispositivo confiável cadastrado.</p>
               ) : (
                 trustedDevices.map((device) => (
                   <div key={device.id} className="rounded-md border p-3 flex items-center justify-between gap-2 flex-wrap">
@@ -712,16 +850,36 @@ export default function ClientAccount() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="historico-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle>Histórico de pedidos</CardTitle>
-            <CardDescription>Seus últimos pedidos para repetir em poucos cliques.</CardDescription>
+            <CardDescription>Seus últimos pedidos para repetir sem perder tempo.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {orderHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Você ainda não tem pedidos vinculados à sua conta.</p>
+            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+              <Input
+                placeholder="Buscar por loja, pedido ou tipo..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={historyStatusFilter}
+                onChange={(e) => setHistoryStatusFilter(e.target.value)}
+              >
+                <option value="all">Todos os status</option>
+                <option value="received">Recebidos</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="in_preparation">Em preparo</option>
+                <option value="ready">Prontos</option>
+                <option value="delivered">Entregues</option>
+                <option value="cancelled">Cancelados</option>
+              </select>
+            </div>
+            {filteredOrderHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum pedido encontrado com esses filtros.</p>
             ) : (
-              orderHistory.map((row) => {
+              filteredOrderHistory.map((row) => {
                 const order = row.orders;
                 const store = order?.establishments;
 
@@ -736,6 +894,9 @@ export default function ClientAccount() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">{ORDER_STATUS_LABELS[order.status] || order.status}</Badge>
+                        <Badge variant={order.payment_status === "paid" ? "default" : "outline"}>
+                          {order.payment_status === "paid" ? "Pago" : "Pagamento pendente"}
+                        </Badge>
                         <Badge variant="outline">{order.order_type === "delivery" ? "Entrega" : "Retirada"}</Badge>
                       </div>
                     </div>
@@ -762,14 +923,23 @@ export default function ClientAccount() {
                         )}
                         <p className="font-semibold">Total: {formatCurrency(Number(order.total || 0))}</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => reorderMutation.mutate(row)}
-                        disabled={reorderMutation.isPending}
-                      >
-                        <Repeat2 className="h-4 w-4 mr-2" />
-                        Refazer pedido
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {order.payment_status !== "paid" && (
+                          <Link to={`/cliente/pagamento-pedido?order=${order.id}`}>
+                            <Button variant="default">
+                              Pagar pedido
+                            </Button>
+                          </Link>
+                        )}
+                        <Button
+                          variant="outline"
+                          onClick={() => reorderMutation.mutate(row)}
+                          disabled={reorderMutation.isPending}
+                        >
+                          <Repeat2 className="h-4 w-4 mr-2" />
+                          Refazer pedido
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -781,5 +951,14 @@ export default function ClientAccount() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 

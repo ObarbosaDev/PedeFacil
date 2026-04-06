@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ const featureBlocks = [
   {
     icon: BarChart3,
     title: "Painel com leitura de operação",
-    desc: "Status de pedido, volume do dia e gargalos em uma visão limpa.",
+    desc: "Pedidos, volume do dia e gargalos da operação em uma leitura que bate o olho e resolve.",
   },
   {
     icon: Bike,
@@ -64,7 +64,7 @@ const roadmap = [
   {
     step: "04",
     title: "Análise e escale",
-    desc: "Relatórios e automações para melhorar margem e SLA.",
+    desc: "Relatórios e automações para subir margem, ritmo e controle da operação.",
   },
 ];
 
@@ -105,7 +105,7 @@ const personaModes = [
     id: "cliente",
     label: "Modo cliente",
     title: "Compra rápida, visual premium e fluxo sem fricção.",
-    desc: "Cardápio bonito, checkout seguro, conta personalizada e recompra em poucos cliques.",
+    desc: "Cardápio bonito, checkout seguro, conta personalizada e recompra sem enrolação.",
     bullets: ["Checkout organizado", "Cupons aplicados", "Histórico e favoritos"],
     icon: User,
   },
@@ -113,7 +113,7 @@ const personaModes = [
     id: "entregador",
     label: "Modo entregador",
     title: "Painel de rua com ações práticas de verdade.",
-    desc: "Aceite, rota, ocorrência, rastreio e PIN final para concluir com segurança.",
+    desc: "Aceite, rota, ocorrência, rastreio e PIN final para fechar a corrida do jeito certo.",
     bullets: ["Google Maps e Waze", "Registro de ocorrência", "Confirmação por PIN"],
     icon: Truck,
   },
@@ -170,7 +170,7 @@ function BrandOrbit() {
       <text x="132" y="98" fill="#22c55e" fontSize="12">+12%</text>
 
       <rect x="364" y="304" width="182" height="82" rx="14" fill="#111827" stroke="#374151" />
-      <text x="378" y="332" fill="#f8fafc" fontSize="12">SLA medio</text>
+      <text x="378" y="332" fill="#f8fafc" fontSize="12">SLA médio</text>
       <text x="378" y="365" fill="#fff" fontSize="26" fontWeight="700">22 min</text>
     </svg>
   );

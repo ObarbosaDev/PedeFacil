@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -60,14 +60,14 @@ export default function DriverRegister() {
     <AuthSplitLayout
       leftEyebrow="Cadastro de entregador"
       leftTitle="Crie sua conta e comece a rodar."
-      leftDescription="Entre no fluxo de entregas com um painel claro para aceitar corridas e atualizar cada etapa."
+      leftDescription="Entre no fluxo de entregas com um painel claro para aceitar corridas e tocar cada etapa sem confusão."
       leftHighlights={[
         { icon: WalletCards, text: "Conta pronta para operar com mais organização." },
         { icon: ShieldCheck, text: "Dados protegidos e fluxo de acesso seguro." },
       ]}
       formEyebrow="Cadastro de entregador"
       formTitle="Criar conta para receber corridas"
-      formDescription="Use o mesmo e-mail informado pelo lojista no seu cadastro."
+      formDescription="Sua conta j� nasce pronta para a base compartilhada da plataforma. Se entrar em opera��o fixa, o sistema encaixa depois."
       formIcon={Bike}
       backTo="/"
       backLabel="Voltar para início"
@@ -124,7 +124,7 @@ export default function DriverRegister() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -137,7 +137,7 @@ export default function DriverRegister() {
                     Caps Lock ativado.
                   </p>
                 ) : null}
-                <p className="text-xs text-zinc-300">{PASSWORD_RULE}</p>
+                <p className="text-xs text-zinc-200">{PASSWORD_RULE}</p>
                 <FormMessage />
               </FormItem>
             )}
@@ -163,7 +163,7 @@ export default function DriverRegister() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -186,7 +186,7 @@ export default function DriverRegister() {
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-300 leading-relaxed">
+      <p className="text-center text-sm text-zinc-200 leading-relaxed">
         Já tem conta?{" "}
         <Link to="/entregador/login" className="text-zinc-100 font-semibold hover:text-white hover:underline inline-flex items-center gap-1">
           Entrar
@@ -196,6 +196,7 @@ export default function DriverRegister() {
     </AuthSplitLayout>
   );
 }
+
 
 
 

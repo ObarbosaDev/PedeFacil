@@ -20,6 +20,7 @@ public class PaymentsWebConfig implements WebMvcConfigurer {
     String[] origins = Stream.of((properties.getAllowedOrigins() == null ? "" : properties.getAllowedOrigins()).split(","))
         .map(String::trim)
         .filter(StringUtils::hasText)
+        .filter(origin -> !"*".equals(origin))
         .toArray(String[]::new);
 
     if (origins.length == 0) {
@@ -29,6 +30,8 @@ public class PaymentsWebConfig implements WebMvcConfigurer {
     registry.addMapping("/api/payments/**")
         .allowedOrigins(origins)
         .allowedMethods("GET", "POST", "OPTIONS")
-        .allowedHeaders("*");
+        .allowedHeaders("Content-Type", "Authorization", "X-Requested-With")
+        .allowCredentials(false)
+        .maxAge(3600);
   }
 }

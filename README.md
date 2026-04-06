@@ -202,34 +202,28 @@ Sem essas migrations, partes de assinatura, segurança de conta e comprovação 
 
 ### Como aplicar migrations (Supabase CLI)
 
-1. Instale a CLI (uma vez):
+1. Use a CLI com `npx` (recomendado):
 
 ```bash
-npm install -g supabase
+npx supabase@latest --version
 ```
 
 2. Faça login:
 
 ```bash
-supabase login
+npx supabase@latest login
 ```
 
 3. Linke o projeto (use o `VITE_SUPABASE_PROJECT_ID` do `.env`):
 
 ```bash
-supabase link --project-ref SEU_PROJECT_ID
+npx supabase@latest link --project-ref SEU_PROJECT_ID
 ```
 
 4. Aplique tudo que está pendente:
 
 ```bash
-supabase db push
-```
-
-Se preferir sem instalar globalmente:
-
-```bash
-npx supabase db push
+npx supabase@latest db push
 ```
 
 ### Teste rápido pós-migration (5 minutos)
@@ -264,6 +258,16 @@ Kit pronto para sair do zero até os primeiros lojistas pagantes:
 
 - Plano de 7 dias e operação prática:
   - `docs/FIRST_CLIENT_LAUNCH_KIT.md`
+- Plano de lançamento em 27 dias:
+  - `docs/PLANO_27_DIAS_LANCAMENTO.md`
+- Checklist final de produção:
+- `docs/CHECKLIST_FINAL_PRODUCAO.md`
+- Runbook final do dia de lançamento:
+  - `docs/GO_LIVE_RUNBOOK_FINAL.md`
+- Checklist de lançamento em 3 dias:
+  - `docs/LAUNCH_3_DIAS_CHECKLIST.md`
+- SQL de validação pré-lançamento:
+  - `docs/SQL_VALIDACAO_PRE_LANCAMENTO.sql`
 - Mensagens prontas de abordagem:
   - `docs/templates/WHATSAPP_OUTREACH.txt`
 - Checklist de contingência diária:
@@ -279,6 +283,7 @@ Kit pronto para sair do zero até os primeiros lojistas pagantes:
 - `npm run backend:test`: testes do backend.
 - `npm run check:repo`: bloqueia arquivos sensíveis rastreados no Git.
 - `npm run check:security`: alias para checks de segurança de repositório.
+- `npm run check:launch-3d`: checklist automatizado de prontidão para lançamento.
 - `npm run build`: build de produção frontend.
 - `npm run preview`: preview do build frontend.
 - `npm run lint`: análise estática.

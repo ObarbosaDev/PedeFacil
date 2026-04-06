@@ -4,8 +4,37 @@
 const baseUrl = process.env.VITE_SUPABASE_URL || "";
 const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 
+const looksLikePlaceholder = (value) => {
+  if (!value) return true;
+  const normalized = String(value).trim().toLowerCase();
+  return (
+    normalized.includes("seu_") ||
+    normalized.includes("sua_") ||
+    normalized.includes("real") ||
+    normalized.includes("placeholder") ||
+    normalized === "..." ||
+    normalized === "null" ||
+    normalized === "undefined"
+  );
+};
+
+const isUuid = (value) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim(),
+  );
+
 if (!baseUrl || !anonKey) {
   console.error("Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente.");
+  process.exit(1);
+}
+
+if (looksLikePlaceholder(baseUrl) || !baseUrl.startsWith("https://")) {
+  console.error("VITE_SUPABASE_URL invalida. Use a URL real do projeto.");
+  process.exit(1);
+}
+
+if (looksLikePlaceholder(anonKey) || !anonKey.startsWith("sb_publishable_")) {
+  console.error("VITE_SUPABASE_PUBLISHABLE_KEY invalida. Use a publishable key real.");
   process.exit(1);
 }
 
@@ -22,6 +51,11 @@ const concurrency = Number(getArg("--concurrency", "40"));
 
 if (!establishmentId) {
   console.error("Use --establishment <uuid_da_loja>.");
+  process.exit(1);
+}
+
+if (looksLikePlaceholder(establishmentId) || !isUuid(establishmentId)) {
+  console.error("Establishment invalido. Use um UUID real da loja em --establishment.");
   process.exit(1);
 }
 
@@ -99,4 +133,3 @@ console.log(`Tempo: ${(elapsedMs / 1000).toFixed(2)}s`);
 console.log(`RPS medio: ${rps}`);
 
 if (fail > 0) process.exit(2);
-
