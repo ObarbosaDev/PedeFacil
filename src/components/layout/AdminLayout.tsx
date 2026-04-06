@@ -22,6 +22,8 @@ import {
   Siren,
   Medal,
   ReceiptText,
+  Headset,
+  Rocket,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -45,8 +47,10 @@ const navItems: { label: string; icon: any; path: string; feature: PlanFeature }
   { label: "Entregadores", icon: Bike, path: "/admin/entregadores", feature: "drivers" },
   { label: "Ranking motoboy", icon: Medal, path: "/admin/entregadores/ranking", feature: "drivers" },
   { label: "Incidentes", icon: Siren, path: "/admin/incidentes", feature: "dashboard" },
+  { label: "Operação marketplace", icon: Rocket, path: "/admin/operacao-marketplace", feature: "dashboard" },
   { label: "Ledger pagamentos", icon: ReceiptText, path: "/admin/pagamentos/ledger", feature: "dashboard" },
   { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes", feature: "automations" },
+  { label: "Suporte Premium", icon: Headset, path: "/admin/suporte", feature: "support" },
   { label: "Go-live", icon: ShieldCheck, path: "/admin/go-live", feature: "dashboard" },
   { label: "Roadmap 30/60/90", icon: Target, path: "/admin/roadmap", feature: "dashboard" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja", feature: "store" },

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -71,7 +71,7 @@ export default function ClientRegister() {
     <AuthSplitLayout
       leftEyebrow="Área do cliente"
       leftTitle="Crie seu perfil e personalize seus pedidos."
-      leftDescription="Com sua conta, você salva endereço, acompanha histórico e refaz pedidos em segundos."
+      leftDescription="Com sua conta, você salva endereço, acompanha histórico e refaz pedido em segundos."
       leftHighlights={[
         { icon: WandSparkles, text: "Experiência personalizada de verdade." },
         { icon: ShieldCheck, text: "Conta segura e dados protegidos." },
@@ -81,7 +81,7 @@ export default function ClientRegister() {
       formDescription={
         prefill.fromCheckout
           ? "Você está quase finalizando seu pedido. Crie sua conta para concluir com segurança."
-          : "Salve seus dados e finalize pedidos sem fricção."
+          : "Salve seus dados e deixe os próximos pedidos bem mais rápidos."
       }
       formIcon={UserPlus}
       backTo="/"
@@ -93,8 +93,7 @@ export default function ClientRegister() {
       quickPoints={["Cadastro rápido", "Dados protegidos", "Finalização sem fricção"]}
     >
       {prefill.fromCheckout && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-300 mb-4">
-          Cadastro rápido: já preenchemos parte dos dados vindos do checkout para você terminar em segundos.
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-200 mb-4">Cadastro rápido: já puxamos parte dos dados do checkout para você terminar isso em segundos.
         </div>
       )}
 
@@ -147,7 +146,7 @@ export default function ClientRegister() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -160,7 +159,7 @@ export default function ClientRegister() {
                     Caps Lock ativado.
                   </p>
                 ) : null}
-                <p className="text-xs text-zinc-300">{PASSWORD_RULE}</p>
+                <p className="text-xs text-zinc-200">{PASSWORD_RULE}</p>
                 <FormMessage />
               </FormItem>
             )}
@@ -187,7 +186,7 @@ export default function ClientRegister() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -211,7 +210,7 @@ export default function ClientRegister() {
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-300 leading-relaxed">
+      <p className="text-center text-sm text-zinc-200 leading-relaxed">
         Já tem conta?{" "}
         <Link to={`/cliente/login${prefill.nextRaw ? `?next=${encodeURIComponent(prefill.nextRaw)}` : ""}`} className="text-zinc-100 font-semibold hover:text-white hover:underline inline-flex items-center gap-1">
           Entrar

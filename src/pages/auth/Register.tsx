@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -61,7 +61,7 @@ export default function Register() {
     <AuthSplitLayout
       leftEyebrow="Cadastro de lojista"
       leftTitle="Coloque sua loja no jogo em poucos minutos."
-      leftDescription="Crie sua conta, configure seu cardápio e comece a receber pedidos com um painel pronto para escalar."
+      leftDescription="Crie sua conta, suba seu cardápio e comece a operar com um painel pronto para crescer junto."
       leftHighlights={[
         { icon: Rocket, text: "Setup rápido, sem dor de cabeça." },
         { icon: BadgeCheck, text: "Fluxo de operação já organizado desde o primeiro dia." },
@@ -69,7 +69,7 @@ export default function Register() {
       ]}
       formEyebrow="Cadastro de lojista"
       formTitle="Criar minha conta"
-      formDescription="Crie a conta, faça o pagamento do plano e libere o painel."
+      formDescription="Crie a conta, escolha o plano e libera o painel sem enrolação."
       formIcon={Store}
       backTo="/"
       backLabel="Voltar para início"
@@ -77,7 +77,7 @@ export default function Register() {
       secondaryLabel="Ir para home"
       leftTone="dark"
       formTone="orange"
-      quickPoints={["Onboarding rápido", "Conta protegida", "Ativação por plano"]}
+      quickPoints={["Onboarding rápido", "Conta protegida", "Ativação sem gambiarra"]}
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -132,7 +132,7 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -145,7 +145,7 @@ export default function Register() {
                     Caps Lock ativado.
                   </p>
                 ) : null}
-                <p className="text-xs text-zinc-300">{PASSWORD_RULE}</p>
+                <p className="text-xs text-zinc-200">{PASSWORD_RULE}</p>
                 <FormMessage />
               </FormItem>
             )}
@@ -172,7 +172,7 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                       aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -196,7 +196,7 @@ export default function Register() {
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-300 leading-relaxed">
+      <p className="text-center text-sm text-zinc-200 leading-relaxed">
         Já tem conta?{" "}
         <Link
           to={`/login${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}

@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+﻿import { supabase } from "@/integrations/supabase/client";
 import { env } from "@/lib/env";
 
 export type BillingCycle = "monthly" | "yearly";
@@ -40,6 +40,48 @@ export type ExternalCheckoutSession = {
   checkout_session_id: string;
 };
 
+const DEFAULT_HTTP_TIMEOUT_MS = 15000;
+
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  init: RequestInit,
+  fallbackErrorMessage: string
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_HTTP_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+
+    const rawText = await response.text();
+    let payload: any = {};
+    try {
+      payload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      payload = {};
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || fallbackErrorMessage);
+    }
+
+    return payload as T;
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("A conexão demorou além do esperado. Tente novamente em instantes.");
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(fallbackErrorMessage);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function getMyStoreSubscription(): Promise<StoreSubscription | null> {
   const { data, error } = await (supabase as any).rpc("get_my_store_subscription");
   if (error) throw error;
@@ -79,36 +121,22 @@ export async function createExternalPlanCheckout(input: {
   failureUrl: string;
 }): Promise<ExternalCheckoutSession> {
   const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
-  const response = await fetch(`${apiBase}/api/payments/plan/checkout`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return fetchJsonWithTimeout<ExternalCheckoutSession>(
+    `${apiBase}/api/payments/plan/checkout`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        checkoutSessionId: input.checkoutSessionId,
+        successUrl: input.successUrl,
+        pendingUrl: input.pendingUrl,
+        failureUrl: input.failureUrl,
+      }),
     },
-    body: JSON.stringify({
-      checkoutSessionId: input.checkoutSessionId,
-      successUrl: input.successUrl,
-      pendingUrl: input.pendingUrl,
-      failureUrl: input.failureUrl,
-    }),
-  });
-
-  const rawText = await response.text();
-  let payload: any = {};
-  try {
-    payload = rawText ? JSON.parse(rawText) : {};
-  } catch {
-    payload = { raw: rawText };
-  }
-
-  if (!response.ok) {
-    const fallback =
-      typeof payload?.raw === "string" && payload.raw.trim()
-        ? payload.raw.slice(0, 220)
-        : "Não foi possível iniciar o pagamento agora.";
-    throw new Error(payload?.message || fallback);
-  }
-
-  return payload as ExternalCheckoutSession;
+    "Não foi possível iniciar o pagamento agora."
+  );
 }
 
 export async function revalidateExternalPlanPayment(input: {
@@ -116,32 +144,18 @@ export async function revalidateExternalPlanPayment(input: {
   paymentId?: string;
 }): Promise<{ status: string; payment_status?: string; revalidated: boolean }> {
   const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
-  const response = await fetch(`${apiBase}/api/payments/plan/revalidate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return fetchJsonWithTimeout<{ status: string; payment_status?: string; revalidated: boolean }>(
+    `${apiBase}/api/payments/plan/revalidate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        checkoutSessionId: input.checkoutSessionId,
+        paymentId: input.paymentId || null,
+      }),
     },
-    body: JSON.stringify({
-      checkoutSessionId: input.checkoutSessionId,
-      paymentId: input.paymentId || null,
-    }),
-  });
-
-  const rawText = await response.text();
-  let payload: any = {};
-  try {
-    payload = rawText ? JSON.parse(rawText) : {};
-  } catch {
-    payload = { raw: rawText };
-  }
-
-  if (!response.ok) {
-    const fallback =
-      typeof payload?.raw === "string" && payload.raw.trim()
-        ? payload.raw.slice(0, 220)
-        : "Não foi possível revalidar o pagamento agora.";
-    throw new Error(payload?.message || fallback);
-  }
-
-  return payload as { status: string; payment_status?: string; revalidated: boolean };
+    "Não foi possível revalidar o pagamento agora."
+  );
 }

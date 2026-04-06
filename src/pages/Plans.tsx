@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, BadgeCheck, Check, CircleHelp, Crown, Rocket, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { BillingMode, getPlanBySlug, getPlanPrice, plans } from "@/lib/plans";
 import { trackProductEvent } from "@/lib/product-analytics";
+import { buildWhatsAppSupportLink } from "@/lib/support";
 
 const comparisonRows = [
   { label: "Pedidos no WhatsApp", values: [true, true, true] },
@@ -64,7 +65,7 @@ export default function Plans() {
 
   const whatsappHref = useMemo(() => {
     const text = `Fala! Quero contratar o plano ${highlightedPlan.name} no PedeFácil. Vamos fechar?`;
-    return `https://wa.me/5500000000000?text=${encodeURIComponent(text)}`;
+    return buildWhatsAppSupportLink(text);
   }, [highlightedPlan.name]);
 
   useEffect(() => {
@@ -76,6 +77,12 @@ export default function Plans() {
 
   return (
     <div className="min-h-screen bg-[#f6f4ef] text-zinc-900">
+      <a
+        href="#conteudo-principal-planos"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-zinc-900 focus:text-zinc-100 focus:px-4 focus:py-2 focus:rounded-md"
+      >
+        Ir para o conteúdo principal
+      </a>
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
         <div className="absolute -top-24 -left-24 h-[26rem] w-[26rem] rounded-full bg-orange-300/25 blur-3xl" />
         <div className="absolute -bottom-20 right-0 h-[28rem] w-[28rem] rounded-full bg-emerald-300/20 blur-3xl" />
@@ -98,7 +105,7 @@ export default function Plans() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-10 space-y-8">
+      <main id="conteudo-principal-planos" className="max-w-7xl mx-auto px-4 py-10 space-y-8">
         <section className="rounded-3xl border border-zinc-200 bg-white/90 backdrop-blur p-6 md:p-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700">
             <Sparkles className="h-3.5 w-3.5 text-orange-500" />
@@ -108,7 +115,7 @@ export default function Plans() {
             Ver planos, comparar certo e escolher sem dúvida.
           </h1>
           <p className="mt-4 text-zinc-600 max-w-3xl">
-            Aqui é direto ao ponto: o que cada plano entrega, quanto custa e qual encaixa melhor no teu momento.
+            Aqui é sem rodeio: o que cada plano entrega, quanto custa e qual faz mais sentido para o teu momento.
           </p>
 
           <div className="mt-6 inline-flex rounded-full border border-zinc-300 bg-zinc-100 p-1" role="radiogroup" aria-label="Frequência de cobrança">

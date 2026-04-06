@@ -1,4 +1,4 @@
-﻿import { Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/formatters";
@@ -47,11 +47,11 @@ export default function ProductCard({ id, name, description, price, image_url, i
             className="rounded-full px-4"
           >
             <Plus className="h-4 w-4 mr-1" />
-            Quero esse
+            Adicionar
           </Button>
         </div>
 
-        {!is_available && <p className="text-xs text-destructive mt-2 font-medium">Esse item está indisponível por agora.</p>}
+        {!is_available && <p className="text-xs text-destructive mt-2 font-medium">Esse item saiu por agora, mas já pode voltar.</p>}
       </div>
     </div>
   );

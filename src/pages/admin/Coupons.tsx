@@ -91,7 +91,7 @@ export default function Coupons() {
   const { data: coupons = [] } = useQuery<Coupon[]>({
     queryKey: ["coupons", establishment?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("coupons")
         .select("*")
         .eq("establishment_id", establishment!.id)
@@ -164,7 +164,7 @@ export default function Coupons() {
       };
 
       if (editing) {
-        const { error } = await supabase.from("coupons").update(payload).eq("id", editing.id);
+        const { error } = await (supabase as any).from("coupons").update(payload).eq("id", editing.id);
         if (error) throw error;
 
         await logAuditEvent({
@@ -184,7 +184,7 @@ export default function Coupons() {
         return;
       }
 
-      const { data: insertedCoupon, error } = await supabase.from("coupons").insert(payload).select("id").single();
+      const { data: insertedCoupon, error } = await (supabase as any).from("coupons").insert(payload).select("id").single();
       if (error) throw error;
 
       await logAuditEvent({
@@ -216,7 +216,7 @@ export default function Coupons() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const coupon = coupons.find((item) => item.id === id);
-      const { error } = await supabase.from("coupons").delete().eq("id", id);
+      const { error } = await (supabase as any).from("coupons").delete().eq("id", id);
       if (error) throw error;
 
       await logAuditEvent({

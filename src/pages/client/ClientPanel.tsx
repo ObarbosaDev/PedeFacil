@@ -15,6 +15,7 @@ import { formatPhone } from "@/lib/formatters";
 import StateCard from "@/components/system/StateCard";
 import { logAuditEvent, logClientError } from "@/lib/observability";
 import {
+  ArrowRight,
   Compass,
   Clock3,
   Home,
@@ -55,12 +56,6 @@ interface LastVisitedStore {
   visitedAt: string;
 }
 
-const STORAGE_KEYS = {
-  clientName: "pedefacil.client.name",
-  favorites: "pedefacil.client.favorites",
-  lastStore: "pedefacil.client.last_store",
-};
-
 const sidebarItems = [
   { label: "Início", icon: Home, href: "#inicio" },
   { label: "Pra Você", icon: WandSparkles, href: "#para-voce" },
@@ -80,23 +75,56 @@ function readJson<T>(key: string, fallback: T): T {
 
 function getGreetingByHour() {
   const hour = new Date().getHours();
-  if (hour < 12) return "Bom dia";
-  if (hour < 18) return "Boa tarde";
-  return "Boa noite";
+  if (hour < 5) {
+    return {
+      eyebrow: "Madrugada no ar",
+      title: "Ainda acordado",
+      description: "Se bateu a fome agora, escolhe uma loja e resolve isso sem enrolação.",
+    };
+  }
+  if (hour < 12) {
+    return {
+      eyebrow: "Começo do dia",
+      title: "Bom dia",
+      description: "Dá para resolver seu pedido rápido e seguir o ritmo sem perder tempo.",
+    };
+  }
+  if (hour < 18) {
+    return {
+      eyebrow: "Meio do corre",
+      title: "Boa tarde",
+      description: "Hora de abrir o cardápio, bater o olho no que presta e pedir sem atrito.",
+    };
+  }
+  return {
+    eyebrow: "Fim do dia",
+    title: "Boa noite",
+    description: "Agora é só escolher bem e fechar o pedido no seu tempo.",
+  };
 }
 
 export default function ClientPanel() {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
 
+  const storageKeys = useMemo(() => {
+    const scope = user?.id || "guest";
+    return {
+      clientName: `pedefacil.client.name.${scope}`,
+      favorites: `pedefacil.client.favorites.${scope}`,
+      lastStore: `pedefacil.client.last_store.${scope}`,
+    };
+  }, [user?.id]);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ClientFilter>("all");
   const [sortBy, setSortBy] = useState<ClientSort>("name");
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  const [clientName, setClientName] = useState(() => localStorage.getItem(STORAGE_KEYS.clientName) || "");
-  const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>(() => readJson<string[]>(STORAGE_KEYS.favorites, []));
-  const [lastVisitedStore, setLastVisitedStore] = useState<LastVisitedStore | null>(() => readJson<LastVisitedStore | null>(STORAGE_KEYS.lastStore, null));
+  const [clientName, setClientName] = useState("");
+  const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>([]);
+  const [lastVisitedStore, setLastVisitedStore] = useState<LastVisitedStore | null>(null);
+  const greeting = getGreetingByHour();
 
   const {
     data: establishments = [],
@@ -142,17 +170,23 @@ export default function ClientPanel() {
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.clientName, clientName.trim());
-  }, [clientName]);
+    setClientName(localStorage.getItem(storageKeys.clientName) || "");
+    setFavoriteStoreIds(readJson<string[]>(storageKeys.favorites, []));
+    setLastVisitedStore(readJson<LastVisitedStore | null>(storageKeys.lastStore, null));
+  }, [storageKeys]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favoriteStoreIds));
-  }, [favoriteStoreIds]);
+    localStorage.setItem(storageKeys.clientName, clientName.trim());
+  }, [clientName, storageKeys]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.favorites, JSON.stringify(favoriteStoreIds));
+  }, [favoriteStoreIds, storageKeys]);
 
   useEffect(() => {
     if (!lastVisitedStore) return;
-    localStorage.setItem(STORAGE_KEYS.lastStore, JSON.stringify(lastVisitedStore));
-  }, [lastVisitedStore]);
+    localStorage.setItem(storageKeys.lastStore, JSON.stringify(lastVisitedStore));
+  }, [lastVisitedStore, storageKeys]);
 
   useEffect(() => {
     if (!user) return;
@@ -160,8 +194,12 @@ export default function ClientPanel() {
   }, [customerFavorites, user]);
 
   useEffect(() => {
-    if (!user || !customerProfile?.full_name) return;
-    setClientName((prev) => prev || customerProfile.full_name);
+    if (!user) return;
+    const profileName = customerProfile?.full_name?.trim();
+    const metadataName = String((user.user_metadata as any)?.full_name || "").trim();
+    const resolvedName = profileName || metadataName;
+    if (!resolvedName) return;
+    setClientName(resolvedName);
   }, [customerProfile, user]);
 
   useEffect(() => {
@@ -239,6 +277,8 @@ export default function ClientPanel() {
     if (favoriteStores.length > 0) return favoriteStores.slice(0, 3);
     return featured;
   }, [favoriteStores, featured]);
+
+  const topSpot = featured[0] || personalizedStores[0] || null;
 
   const favoriteMutation = useMutation({
     mutationFn: async ({ storeId, isFavorite }: { storeId: string; isFavorite: boolean }) => {
@@ -340,7 +380,12 @@ export default function ClientPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-[#f3efe6]">
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <div className="absolute -top-24 right-0 h-96 w-96 rounded-full bg-orange-200/30 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-sky-200/20 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(120deg,rgba(24,24,27,0.15)_1px,transparent_1px)] [background-size:22px_22px]" />
+      </div>
       <a
         href="#cliente-conteudo"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md"
@@ -353,7 +398,7 @@ export default function ClientPanel() {
             <Link to="/" className="flex items-center" aria-label="Voltar para a página inicial">
               <img src="/logo.png" alt="Logo Pede Fácil" className="h-10 w-auto object-contain" />
             </Link>
-            <p className="text-xs text-sidebar-foreground/60 mt-1">Seu cantinho de pedidos</p>
+            <p className="text-xs text-sidebar-foreground/60 mt-1">Sua base para pedir bem</p>
           </div>
 
           <nav className="px-3 space-y-1">
@@ -376,7 +421,7 @@ export default function ClientPanel() {
           <div className="p-4 mt-4">
             <Card className="bg-sidebar-accent border-sidebar-border text-sidebar-foreground">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Resumo da vez</CardTitle>
+                <CardTitle className="text-sm">Radar rápido</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-xs text-sidebar-foreground/80">
                 <p>{metrics.total} loja(s) para conhecer</p>
@@ -404,16 +449,16 @@ export default function ClientPanel() {
             </div>
           </section>
 
-          <section id="inicio" className="rounded-2xl overflow-hidden border bg-card scroll-mt-20">
-            <div className="p-6 md:p-8 bg-gradient-to-r from-primary via-primary to-orange-500 text-primary-foreground">
-              <p className="text-xs uppercase tracking-widest opacity-85 mb-2">Bora pedir?</p>
+          <section id="inicio" className="overflow-hidden rounded-[32px] border border-zinc-950/10 bg-[#111111] text-white shadow-[0_28px_100px_rgba(15,23,42,0.18)] scroll-mt-20">
+            <div className="p-6 md:p-8 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_28%),linear-gradient(135deg,#111111,#1f2937_55%,#7c2d12_100%)]">
+              <p className="text-xs uppercase tracking-widest opacity-85 mb-2">{greeting.eyebrow}</p>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                   <h1 className="text-3xl md:text-4xl font-black">
-                    {getGreetingByHour()}{clientName ? `, ${clientName}` : ""}. O que vai ser hoje?
+                    {greeting.title}{clientName ? `, ${clientName}` : ""}. O que vai sair daí hoje?
                   </h1>
                   <p className="mt-2 text-primary-foreground/90 max-w-2xl">
-                    Abre o cardápio, escolhe no seu tempo e fecha o pedido sem enrolação.
+                    {greeting.description}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -439,12 +484,13 @@ export default function ClientPanel() {
               </div>
             </div>
 
-            <div className="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 gap-3 border-t border-white/10 bg-white/5 p-4 md:p-5 lg:grid-cols-12">
               <div className="lg:col-span-4">
                 <Input
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Como você quer ser chamado?"
+                  placeholder="Como você quer aparecer por aqui?"
+                  className="border-white/10 bg-white text-zinc-950 placeholder:text-zinc-500"
                   aria-label="Nome de preferência"
                 />
               </div>
@@ -454,15 +500,15 @@ export default function ClientPanel() {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar por nome, bairro ou descrição..."
-                  className="pl-9"
+                  placeholder="Buscar loja, bairro ou aquele tipo de comida..."
+                  className="pl-9 border-white/10 bg-white text-zinc-950 placeholder:text-zinc-500"
                   aria-label="Buscar lojas"
                 />
               </div>
 
               <div className="lg:col-span-2">
                 <Select value={filter} onValueChange={(value) => setFilter(value as ClientFilter)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-white/10 bg-white text-zinc-950">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -477,7 +523,7 @@ export default function ClientPanel() {
 
               <div className="lg:col-span-2">
                 <Select value={sortBy} onValueChange={(value) => setSortBy(value as ClientSort)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-white/10 bg-white text-zinc-950">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -489,12 +535,89 @@ export default function ClientPanel() {
             </div>
           </section>
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatsCard title="Lojas abertas" value={metrics.total} icon={Store} />
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatsCard title="Lojas no radar" value={metrics.total} icon={Store} />
             <StatsCard title="Com logo" value={metrics.withLogo} icon={Sparkles} />
             <StatsCard title="Com endereço" value={metrics.withAddress} icon={MapPin} />
             <StatsCard title="Com horário" value={metrics.withHours} icon={Clock3} />
           </section>
+
+          {topSpot && (
+            <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+              <Card className="overflow-hidden rounded-[32px] border-zinc-950/10 bg-[#111111] text-white shadow-[0_28px_100px_rgba(15,23,42,0.16)]">
+                <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="p-6 md:p-8">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Loja em destaque</p>
+                    <h2 className="mt-3 text-3xl font-black tracking-tight">{topSpot.name}</h2>
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-300">
+                      {topSpot.description || "Loja pronta para abrir, escolher bem e fechar pedido sem fricção."}
+                    </p>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Endereço</p>
+                        <p className="mt-2 text-sm font-semibold text-white">{topSpot.address || "A loja ainda não soltou endereço no app."}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Funcionamento</p>
+                        <p className="mt-2 text-sm font-semibold text-white">{topSpot.opening_hours || "Horário ainda não configurado"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex flex-wrap gap-2">
+                      <Link to={`/loja/${topSpot.slug}`} onClick={() => registerVisitedStore(topSpot)}>
+                        <Button className="bg-white text-zinc-950 hover:bg-zinc-200">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          Abrir cardápio
+                        </Button>
+                      </Link>
+                      <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10" onClick={() => openWhatsApp(topSpot.whatsapp)}>
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        Chamar no WhatsApp
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="relative min-h-[280px] border-t border-white/10 lg:border-l lg:border-t-0">
+                    {topSpot.logo_url ? (
+                      <img src={topSpot.logo_url} alt={topSpot.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full min-h-[280px] items-center justify-center bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.25),transparent_45%),linear-gradient(135deg,#0f172a,#7c2d12)]">
+                        <Store className="h-16 w-16 text-white/80" />
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5">
+                      <p className="text-xs uppercase tracking-[0.18em] text-zinc-300">Escolha rápida</p>
+                      <p className="mt-1 text-lg font-black text-white">Se quiser um caminho curto, começa por aqui.</p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden rounded-[32px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
+                <CardHeader className="border-b border-zinc-950/10 bg-[#faf7f2]">
+                  <CardTitle className="text-lg font-black tracking-tight">Seu ritmo por aqui</CardTitle>
+                  <CardDescription>Atalhos montados para você chegar no pedido mais rápido.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 p-5">
+                  <div className="rounded-2xl border border-zinc-200 bg-[#faf7f2] p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Favoritas</p>
+                    <p className="mt-2 text-3xl font-black text-zinc-950">{favoriteStores.length}</p>
+                    <p className="mt-2 text-sm text-zinc-600">Lojas que já ficaram no seu radar.</p>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Última visita</p>
+                    <p className="mt-2 text-lg font-black text-zinc-950">{lastVisitedStore?.name || "Nada salvo ainda"}</p>
+                    <p className="mt-2 text-sm text-zinc-600">
+                      {lastVisitedStore ? "Seu atalho para continuar de onde parou." : "Assim que você abrir uma loja, ela aparece aqui."}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Exploração</p>
+                    <p className="mt-2 text-sm text-zinc-600">Tem {filteredEstablishments.length} loja(s) na leitura atual. Se quiser abrir o funil, limpa os filtros e passeia mais.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          )}
 
           <section id="para-voce" className="space-y-4 scroll-mt-20">
             <div className="flex items-center justify-between">
@@ -506,7 +629,7 @@ export default function ClientPanel() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-primary/30 bg-primary/5">
+              <Card className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                 <CardHeader>
                   <CardTitle className="text-base">Última loja visitada</CardTitle>
                   <CardDescription>
@@ -518,18 +641,21 @@ export default function ClientPanel() {
                     <div className="space-y-3">
                       <p className="font-semibold">{lastVisitedStore.name}</p>
                       <Link to={`/loja/${lastVisitedStore.slug}`} className="block">
-                        <Button className="w-full">Continuar pedido</Button>
+                        <Button className="w-full">
+                          Continuar pedido
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
                       </Link>
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Você ainda não abriu nenhum cardápio por aqui.
+                      Você ainda não abriu nenhum cardápio por aqui. Assim que pintar uma visita, ela fica salva nesse atalho.
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="border-orange-300/40 bg-orange-50/40">
+              <Card className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-[linear-gradient(135deg,rgba(249,115,22,0.10),rgba(255,255,255,0.92))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Flame className="h-4 w-4 text-orange-500" />
@@ -550,7 +676,7 @@ export default function ClientPanel() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Toque no coração das lojas para montar sua lista.
+                      Salva suas queridinhas no coração e deixa esse bloco com a sua cara.
                     </p>
                   )}
                 </CardContent>
@@ -560,11 +686,11 @@ export default function ClientPanel() {
             {personalizedStores.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {personalizedStores.map((store) => (
-                  <Card key={`personal-${store.id}`} className="border-primary/20 bg-card/80">
+                  <Card key={`personal-${store.id}`} className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                     <CardHeader>
                       <CardTitle className="text-base line-clamp-1">{store.name}</CardTitle>
                       <CardDescription className="line-clamp-2">
-                        {store.description || "Cardápio pronto pra você pedir sem stress."}
+                        {store.description || "Loja pronta para você abrir, escolher e pedir sem travar."}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -595,17 +721,17 @@ export default function ClientPanel() {
             ) : featured.length === 0 ? (
               <Card>
                 <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                  Ainda sem achadinhos por aqui. Assim que surgirem destaques, aparecem aqui.
+                  Ainda sem destaque por aqui. Quando tiver loja redonda para aparecer primeiro, ela cai nessa vitrine.
                 </CardContent>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {featured.map((store) => (
-                  <Card key={`featured-${store.id}`} className="border-primary/30 bg-primary/5">
+                  <Card key={`featured-${store.id}`} className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(255,255,255,0.96))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                     <CardHeader>
                       <CardTitle className="text-base line-clamp-1">{store.name}</CardTitle>
                       <CardDescription className="line-clamp-2">
-                        {store.description || "Cardápio pronto para pedidos online."}
+                        {store.description || "Loja redonda para abrir cardápio e pedir no app."}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -631,7 +757,8 @@ export default function ClientPanel() {
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <Card key={index}>
+                  <Card key={index} className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white/95 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                    <div className="h-24 bg-[linear-gradient(135deg,rgba(249,115,22,0.12),rgba(15,23,42,0.06))]" />
                     <CardHeader>
                       <Skeleton className="h-6 w-2/3" />
                       <Skeleton className="h-4 w-full" />
@@ -647,7 +774,7 @@ export default function ClientPanel() {
             ) : filteredEstablishments.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
-                  Nada por aqui com esse filtro. Tente outro termo.
+                  Nada apareceu com esse filtro. Troca a busca ou abre tudo de novo.
                 </CardContent>
               </Card>
             ) : (
@@ -655,8 +782,10 @@ export default function ClientPanel() {
                 {filteredEstablishments.map((store) => {
                   const isFavorite = favoriteStoreIds.includes(store.id);
                   return (
-                    <Card key={store.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="h-24 bg-gradient-to-r from-primary/20 to-primary/5" />
+                  <Card key={store.id} className="group overflow-hidden rounded-[28px] border-zinc-950/10 bg-white/95 shadow-[0_18px_60px_rgba(15,23,42,0.08)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(15,23,42,0.12)]">
+                      <div className="relative h-24 bg-[linear-gradient(135deg,rgba(249,115,22,0.18),rgba(15,23,42,0.08))]">
+                        <div className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.18),transparent_35%)]" />
+                      </div>
                       <CardHeader className="pt-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
@@ -673,15 +802,15 @@ export default function ClientPanel() {
                             )}
                             <div className="min-w-0">
                               <CardTitle className="line-clamp-1 text-lg">{store.name}</CardTitle>
-                              <p className="text-xs text-muted-foreground">Pedido online, sem enrolação.</p>
+                              <p className="text-xs text-muted-foreground">Pedir por aqui é rápido e direto.</p>
                             </div>
                           </div>
                           <button
                             type="button"
-                            className={`h-8 w-8 rounded-full border inline-flex items-center justify-center ${
+                            className={`h-9 w-9 rounded-full border inline-flex items-center justify-center transition ${
                               isFavorite
                                 ? "bg-rose-100 border-rose-300 text-rose-600"
-                                : "bg-background border-border text-muted-foreground"
+                                : "bg-background border-border text-muted-foreground hover:border-primary/30 hover:text-primary"
                             }`}
                             onClick={() => toggleFavorite(store.id)}
                             aria-label={isFavorite ? `Remover ${store.name} dos favoritos` : `Adicionar ${store.name} aos favoritos`}
@@ -750,4 +879,6 @@ export default function ClientPanel() {
     </div>
   );
 }
+
+
 

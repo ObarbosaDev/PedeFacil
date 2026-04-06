@@ -6,7 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Bike, MapPin, ShieldCheck } from "lucide-react";
+import { Bike, Car, MapPin, ShieldCheck } from "lucide-react";
+
+function getVehicleLabel(type?: string | null) {
+  if (type === "carro") return "Carro";
+  if (type === "bike") return "Bike";
+  return "Moto";
+}
 
 const statusLabels: Record<string, string> = {
   assigned: "Pedido despachado para um entregador",
@@ -157,6 +163,52 @@ export default function DeliveryTracking() {
             <div className="rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">Contato do entregador</p>
               <p className="font-semibold">{data.driver_phone}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quem está levando seu pedido</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-[120px_1fr]">
+            <div className="flex items-center justify-center">
+              {data.driver_avatar_url ? (
+                <img
+                  src={data.driver_avatar_url}
+                  alt={data.driver_name}
+                  className="h-24 w-24 rounded-full border object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-24 w-24 items-center justify-center rounded-full border bg-muted text-muted-foreground">
+                  <Bike className="h-8 w-8" />
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Entregador</p>
+                <p className="text-lg font-semibold">{data.driver_name}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Veículo</p>
+                  <p className="font-semibold flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    {getVehicleLabel(data.driver_vehicle_type)}
+                    {[data.driver_vehicle_brand, data.driver_vehicle_model].filter(Boolean).length
+                      ? ` • ${[data.driver_vehicle_brand, data.driver_vehicle_model].filter(Boolean).join(" ")}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Identificação</p>
+                  <p className="font-semibold">
+                    {[data.driver_vehicle_color, data.driver_license_plate].filter(Boolean).join(" • ") || "Dados ainda não informados"}
+                  </p>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

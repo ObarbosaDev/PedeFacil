@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,12 +16,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, getDeliveryOperationModeLabel, PAYMENT_METHOD_LABELS } from "@/lib/formatters";
 import { trackCheckoutEvent } from "@/lib/analytics";
 import { generateWhatsAppMessage, openWhatsApp } from "@/lib/whatsapp";
 import { createTraceId, logAuditEvent, withTrace } from "@/lib/observability";
+import { createExternalOrderCheckout, startOrderCheckoutSession } from "@/lib/order-payments";
 import { toast } from "sonner";
-import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent, ClipboardCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ShoppingBag, ShieldCheck, Clock3, MessageCircle, TicketPercent, ClipboardCheck, Sparkles, CreditCard, Bike, WalletCards } from "lucide-react";
 
 const checkoutSchema = z
   .object({
@@ -30,7 +31,7 @@ const checkoutSchema = z
     orderType: z.enum(["pickup", "delivery"]),
     fulfillmentMode: z.enum(["asap", "scheduled"]),
     scheduledFor: z.string().optional(),
-    paymentMethod: z.enum(["pix", "credit_card", "debit_card", "cash"]),
+    paymentMethod: z.enum(["pix", "credit_card", "debit_card", "cash", "meal_voucher"]),
     observation: z.string().max(500).optional(),
     deliveryStreet: z.string().optional(),
     deliveryNumber: z.string().optional(),
@@ -136,12 +137,14 @@ export default function Checkout() {
   const { user } = useAuth();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { items, total, clearCart, addItem } = useCart();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryFeeMessage, setDeliveryFeeMessage] = useState<string>("");
   const [deliveryRuleStatus, setDeliveryRuleStatus] = useState<DeliveryRuleStatus>("zip_missing");
+  const [checkoutSubmitError, setCheckoutSubmitError] = useState<string | null>(null);
   const serviceFee = 0;
   const draftStorageKey = `pedefacil.checkout.draft.${slug || "default"}`;
   const orderIdempotencyStorageKey = `${draftStorageKey}.idempotency`;
@@ -205,6 +208,41 @@ export default function Checkout() {
   const watchedValues = useWatch({ control: form.control });
   const orderType = form.watch("orderType");
   const fulfillmentMode = form.watch("fulfillmentMode");
+  const selectedPaymentMethod = form.watch("paymentMethod");
+  const acceptsMarketplacePayments = Boolean((establishment as any)?.accepts_marketplace_payments);
+  const acceptsMealVoucher = Boolean((establishment as any)?.accepts_meal_voucher);
+  const acceptingOrdersNow = (establishment as any)?.accepting_orders_now !== false;
+  const acceptsScheduledOrders = (establishment as any)?.accepts_scheduled_orders !== false;
+  const closedMessage =
+    String((establishment as any)?.closed_message || "").trim() ||
+    "Loja fechada no momento. Se quiser, já deixa agendado para amanhã.";
+  const deliveryOperationMode = String((establishment as any)?.delivery_operation_mode || "own_fleet");
+  const supportsInAppPaymentMethod = selectedPaymentMethod === "pix" || selectedPaymentMethod === "credit_card" || selectedPaymentMethod === "debit_card";
+  const shouldUseInAppPayment = acceptsMarketplacePayments && supportsInAppPaymentMethod;
+  const storePixKey = String((establishment as any)?.pix_key || "").trim();
+  const storePixRecipientName = String((establishment as any)?.pix_recipient_name || "").trim();
+  const storePixInstructions =
+    String((establishment as any)?.pix_instructions || "").trim() ||
+    "Depois de pagar, envie o comprovante no WhatsApp da loja para liberação.";
+  const canUseManualPixFallback = selectedPaymentMethod === "pix" && !shouldUseInAppPayment && !!storePixKey;
+  const availablePaymentMethods = [
+    { id: "pix", label: "PIX" },
+    { id: "credit_card", label: "Cartão de crédito" },
+    { id: "debit_card", label: "Cartão de débito" },
+    { id: "cash", label: "Dinheiro" },
+    ...(acceptsMealVoucher ? [{ id: "meal_voucher", label: "Vale-alimentação" }] : []),
+  ];
+  const nextDayScheduleValue = useMemo(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(12, 0, 0, 0);
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+    const day = String(tomorrow.getDate()).padStart(2, "0");
+    const hours = String(tomorrow.getHours()).padStart(2, "0");
+    const minutes = String(tomorrow.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -497,7 +535,7 @@ export default function Checkout() {
       const normalizedCode = couponCode.trim().toUpperCase();
       if (!normalizedCode) throw new Error("Digite um código de cupom.");
 
-      const { data: coupon, error } = await supabase
+      const { data: coupon, error } = await (supabase as any)
         .from("coupons")
         .select("*")
         .eq("establishment_id", establishment.id)
@@ -573,6 +611,9 @@ export default function Checkout() {
   };
 
   const orderMutation = useMutation({
+    onMutate: () => {
+      setCheckoutSubmitError(null);
+    },
     mutationFn: async (data: CheckoutForm) => {
       if (orderSubmitLockRef.current) {
         throw new Error("Seu pedido já está sendo enviado. Aguarde alguns segundos.");
@@ -621,11 +662,26 @@ export default function Checkout() {
       const isDelivery = data.orderType === "delivery";
       const isScheduledOrder = data.fulfillmentMode === "scheduled";
       const establishmentOps = establishment as any;
+      const manuallyClosed = establishmentOps?.accepting_orders_now === false;
       const isStorePausedNow = Boolean(
         establishmentOps?.busy_mode_enabled &&
         establishmentOps?.busy_pause_until &&
         new Date(establishmentOps.busy_pause_until).getTime() > Date.now()
       );
+
+      if (manuallyClosed && !isScheduledOrder) {
+        throw new Error(closedMessage);
+      }
+
+      if (manuallyClosed && isScheduledOrder) {
+        const scheduledDate = new Date(String(data.scheduledFor || ""));
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() < tomorrow.getTime()) {
+          throw new Error("Com a loja fechada, o pedido precisa ficar agendado para amanhã em diante.");
+        }
+      }
 
       if (isStorePausedNow && !isScheduledOrder) {
         const resumeAt = establishmentOps?.busy_pause_until
@@ -791,26 +847,102 @@ export default function Checkout() {
         ),
       });
 
-      await trackCheckoutEvent({
-        establishmentId: establishment!.id,
-        userId: user.id,
-        eventName: "order_submitted",
-        metadata: {
-          orderId: order.id,
-          idempotencyKey,
-          created: !!placedOrder.created,
-          orderType: data.orderType,
-          paymentMethod: data.paymentMethod,
-          total: finalTotal,
-        },
-      });
+      let paymentRedirectUrl: string | null = null;
+      let manualPixFallback = false;
+      let paymentFlow: "in_app" | "manual_pix" | "whatsapp" = "whatsapp";
 
-      return { order, data, created: !!placedOrder.created };
+      if (acceptsMarketplacePayments && (data.paymentMethod === "pix" || data.paymentMethod === "credit_card" || data.paymentMethod === "debit_card")) {
+        try {
+          const checkoutPaymentMethod = data.paymentMethod === "pix" ? "pix" : "card";
+          const paymentSession = await startOrderCheckoutSession({
+            orderId: order.id,
+            paymentMethod: checkoutPaymentMethod,
+          });
+
+          const paymentBaseUrl = `${window.location.origin}/cliente/pagamento-pedido?order=${order.id}&checkout_session_id=${paymentSession.checkout_session_id}`;
+          const paymentCheckout = await createExternalOrderCheckout({
+            checkoutSessionId: paymentSession.checkout_session_id,
+            orderId: order.id,
+            successUrl: `${paymentBaseUrl}&payment_return=success`,
+            pendingUrl: `${paymentBaseUrl}&payment_return=pending`,
+            failureUrl: `${paymentBaseUrl}&payment_return=failure`,
+          });
+
+          paymentRedirectUrl = paymentCheckout.checkout_url;
+          paymentFlow = "in_app";
+
+          await trackCheckoutEvent({
+            establishmentId: establishment!.id,
+            userId: user.id,
+            eventName: "order_submitted",
+            metadata: {
+              orderId: order.id,
+              idempotencyKey,
+              created: !!placedOrder.created,
+              orderType: data.orderType,
+              paymentMethod: data.paymentMethod,
+              total: finalTotal,
+              paymentFlow: "in_app",
+              checkoutSessionId: paymentSession.checkout_session_id,
+            },
+          });
+        } catch (paymentError: any) {
+          // Se a loja ainda não tiver gateway pronto, cai para PIX manual sem perder o pedido.
+          if (data.paymentMethod === "pix" && storePixKey) {
+            manualPixFallback = true;
+            paymentFlow = "manual_pix";
+          } else {
+            throw paymentError;
+          }
+        }
+      } else {
+        if (data.paymentMethod === "pix" && storePixKey) {
+          manualPixFallback = true;
+          paymentFlow = "manual_pix";
+        }
+        await trackCheckoutEvent({
+          establishmentId: establishment!.id,
+          userId: user.id,
+          eventName: "order_submitted",
+          metadata: {
+            orderId: order.id,
+            idempotencyKey,
+            created: !!placedOrder.created,
+            orderType: data.orderType,
+            paymentMethod: data.paymentMethod,
+            total: finalTotal,
+            paymentFlow,
+          },
+        });
+      }
+
+      return { order, data, created: !!placedOrder.created, paymentRedirectUrl, manualPixFallback };
       } finally {
         orderSubmitLockRef.current = false;
       }
     },
     onSuccess: (result) => {
+      const successMessage = result.created
+        ? "Pedido registrado com sucesso."
+        : "Pedido já estava salvo e foi recuperado sem duplicar.";
+
+      clearCart();
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(orderIdempotencyStorageKey);
+      orderIdempotencyKeyRef.current = "";
+
+      if (result.paymentRedirectUrl) {
+        toast.success(`${successMessage} Agora vamos abrir o pagamento.`);
+        window.location.href = result.paymentRedirectUrl;
+        return;
+      }
+
+      if (result.manualPixFallback) {
+        toast.success(`${successMessage} Agora é só copiar a chave PIX da loja e pagar pelo seu banco.`);
+        navigate(`/cliente/pagamento-pedido?order=${result.order.id}&manual_pix=1`);
+        return;
+      }
+
       const message = generateWhatsAppMessage({
         storeName: establishment!.name,
         whatsappNumber: establishment!.whatsapp,
@@ -842,14 +974,14 @@ export default function Checkout() {
       });
 
       openWhatsApp(establishment!.whatsapp, message);
-      clearCart();
-      localStorage.removeItem(draftStorageKey);
-      localStorage.removeItem(orderIdempotencyStorageKey);
-      orderIdempotencyKeyRef.current = "";
-      toast.success(result.created ? "Pedido enviado com sucesso." : "Pedido já estava registrado e foi recuperado.");
+      toast.success(successMessage);
       navigate(`/loja/${slug}`);
     },
-    onError: (err: any) => toast.error(getFriendlyCheckoutError(err)),
+    onError: (err: any) => {
+      const message = getFriendlyCheckoutError(err);
+      setCheckoutSubmitError(message);
+      toast.error(message);
+    },
   });
 
   const deliveryUnavailable = orderType === "delivery" && deliveryRuleStatus === "out_of_area";
@@ -861,7 +993,8 @@ export default function Checkout() {
     new Date((establishment as any).busy_pause_until).getTime() > Date.now()
   );
   const isSubmittingOrder = orderMutation.isPending || orderSubmitLockRef.current;
-  const canSubmitOrder = !isSubmittingOrder && !deliveryUnavailable && !deliveryMinimumNotReached && !storePausedNow;
+  const storeClosedNow = !acceptingOrdersNow && fulfillmentMode !== "scheduled";
+  const canSubmitOrder = !isSubmittingOrder && !deliveryUnavailable && !deliveryMinimumNotReached && !storePausedNow && !storeClosedNow;
 
   if (!user) {
     return (
@@ -927,7 +1060,13 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <div className="max-w-6xl mx-auto px-4 py-8 pb-28 md:pb-8 space-y-6">
+      <a
+        href="#conteudo-principal-checkout"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-zinc-900 focus:text-zinc-100 focus:px-4 focus:py-2 focus:rounded-md"
+      >
+        Ir para o conteúdo principal
+      </a>
+      <div id="conteudo-principal-checkout" className="max-w-6xl mx-auto px-4 py-8 pb-28 md:pb-8 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button variant="ghost" onClick={() => navigate(`/loja/${slug}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />Voltar ao cardápio
@@ -989,6 +1128,54 @@ export default function Checkout() {
               <div className="rounded-lg border bg-background p-2">
                 <p className="font-semibold">3. Entrega/retirada</p>
                 <p className="text-muted-foreground mt-1">Você acompanha e finaliza sem dor de cabeça.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-4 mt-4">
+            <div className="rounded-2xl border bg-zinc-950 text-zinc-100 p-5 relative overflow-hidden">
+              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-orange-400/20 blur-3xl pointer-events-none" />
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Operação da loja</p>
+              <h2 className="text-2xl font-black mt-2">Checkout com leitura de plataforma.</h2>
+              <p className="text-zinc-300 mt-2">
+                Esta loja roda em <span className="font-semibold text-white">{getDeliveryOperationModeLabel(deliveryOperationMode)}</span>.
+                {acceptsMarketplacePayments
+                  ? " A estrutura de meios digitais da operação já está ligada."
+                  : " O pedido entra por aqui e a confirmação financeira segue o fluxo da loja."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge className="bg-white text-zinc-900 inline-flex items-center gap-1">
+                  <Bike className="h-3.5 w-3.5" />
+                  {getDeliveryOperationModeLabel(deliveryOperationMode)}
+                </Badge>
+                <Badge variant="outline" className="border-zinc-700 text-zinc-200 inline-flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  {acceptsMarketplacePayments ? "Pagamento digital ativo" : "Pagamento alinhado com a loja"}
+                </Badge>
+                {acceptsMealVoucher ? (
+                  <Badge variant="outline" className="border-zinc-700 text-zinc-200 inline-flex items-center gap-1">
+                    <WalletCards className="h-3.5 w-3.5" />
+                    Vale-alimentação habilitado
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-muted/20 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Leitura rapida</p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Meios ativos</span>
+                  <span className="font-semibold text-right">{availablePaymentMethods.map((method) => method.label).join(" • ")}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Entrega</span>
+                  <span className="font-semibold">{orderType === "delivery" ? "Com rota organizada no app" : "Retirada no balcao"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Pagamento escolhido</span>
+                  <span className="font-semibold">{PAYMENT_METHOD_LABELS[String(selectedPaymentMethod)] || "PIX"}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1150,6 +1337,11 @@ export default function Checkout() {
                     <FormItem>
                       <FormLabel>Nome</FormLabel>
                       <FormControl><Input placeholder="Como você quer ser chamado?" {...field} /></FormControl>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -1158,6 +1350,11 @@ export default function Checkout() {
                     <FormItem>
                       <FormLabel>Telefone / WhatsApp</FormLabel>
                       <FormControl><Input placeholder="(11) 99999-8888" {...field} /></FormControl>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -1177,6 +1374,11 @@ export default function Checkout() {
                           </Label>
                         </RadioGroup>
                       </FormControl>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -1186,16 +1388,21 @@ export default function Checkout() {
                       <FormLabel>Quando preparar?</FormLabel>
                       <FormControl>
                         <RadioGroup value={field.value} onValueChange={field.onChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Label htmlFor="asap" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                          <Label htmlFor="asap" className={`flex items-center gap-2 rounded-lg border p-3 ${acceptingOrdersNow ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
                             <RadioGroupItem value="asap" id="asap" />
-                            O quanto antes
+                            Pedir agora
                           </Label>
                           <Label htmlFor="scheduled" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
                             <RadioGroupItem value="scheduled" id="scheduled" />
-                            Quero agendar
+                            ${acceptingOrdersNow ? "Quero agendar" : "Agendar para amanhã"}
                           </Label>
                         </RadioGroup>
                       </FormControl>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -1204,8 +1411,13 @@ export default function Checkout() {
                     <FormField control={form.control} name="scheduledFor" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Horário agendado</FormLabel>
-                        <FormControl><Input type="datetime-local" {...field} /></FormControl>
-                        <FormMessage />
+                        <FormControl><Input type="datetime-local" min={acceptingOrdersNow ? undefined : nextDayScheduleValue} {...field} /></FormControl>
+                        {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                       </FormItem>
                     )} />
                   )}
@@ -1215,27 +1427,45 @@ export default function Checkout() {
                       <FormLabel>Forma de pagamento</FormLabel>
                       <FormControl>
                         <RadioGroup value={field.value} onValueChange={field.onChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Label htmlFor="pix" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
-                            <RadioGroupItem value="pix" id="pix" />
-                            PIX
-                          </Label>
-                          <Label htmlFor="credit_card" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
-                            <RadioGroupItem value="credit_card" id="credit_card" />
-                            Cartão de crédito
-                          </Label>
-                          <Label htmlFor="debit_card" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
-                            <RadioGroupItem value="debit_card" id="debit_card" />
-                            Cartão de débito
-                          </Label>
-                          <Label htmlFor="cash" className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
-                            <RadioGroupItem value="cash" id="cash" />
-                            Dinheiro
-                          </Label>
+                          {availablePaymentMethods.map((method) => (
+                            <Label key={method.id} htmlFor={method.id} className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                              <RadioGroupItem value={method.id} id={method.id} />
+                              {method.label}
+                            </Label>
+                          ))}
                         </RadioGroup>
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        {shouldUseInAppPayment
+                          ? "Esse pagamento fecha dentro da jornada, com cobrança segura e retorno automático para o pedido."
+                          : canUseManualPixFallback
+                            ? "PIX manual ativo: você paga no app do seu banco e a loja confirma por aqui."
+                            : acceptsMarketplacePayments
+                              ? "PIX e cartão já podem rodar no app. Dinheiro e vale seguem no pedido para a loja confirmar."
+                              : "A forma escolhida entra no pedido para a loja tocar a confirmação."}
+                      </p>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
+
+                  {canUseManualPixFallback && (
+                    <div className="rounded-xl border border-emerald-300/40 bg-emerald-50 p-4 space-y-3">
+                      <p className="text-sm font-semibold">PIX da loja (todos os bancos)</p>
+                      <div className="rounded-lg border border-emerald-200 bg-white p-3">
+                        <p className="text-xs text-muted-foreground">Chave PIX</p>
+                        <p className="font-semibold break-all">{storePixKey}</p>
+                        {storePixRecipientName ? (
+                          <p className="text-xs text-muted-foreground mt-1">Recebedor: {storePixRecipientName}</p>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{storePixInstructions}</p>
+                    </div>
+                  )}
 
                   {orderType === "delivery" && (
                     <div className="rounded-xl border p-4 space-y-4 bg-muted/20">
@@ -1247,7 +1477,12 @@ export default function Checkout() {
                             <FormItem>
                               <FormLabel>Rua</FormLabel>
                               <FormControl><Input placeholder="Rua das Flores" className={formErrors.deliveryStreet ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                              <FormMessage />
+                              {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                             </FormItem>
                           )} />
                         </div>
@@ -1255,7 +1490,12 @@ export default function Checkout() {
                           <FormItem>
                             <FormLabel>Número</FormLabel>
                             <FormControl><Input placeholder="123" className={formErrors.deliveryNumber ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                            <FormMessage />
+                            {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                           </FormItem>
                         )} />
                       </div>
@@ -1265,14 +1505,24 @@ export default function Checkout() {
                           <FormItem>
                             <FormLabel>Bairro</FormLabel>
                             <FormControl><Input placeholder="Centro" className={formErrors.deliveryNeighborhood ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                            <FormMessage />
+                            {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="deliveryZipCode" render={({ field }) => (
                           <FormItem>
                             <FormLabel>CEP</FormLabel>
                             <FormControl><Input placeholder="00000-000" className={formErrors.deliveryZipCode ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                            <FormMessage />
+                            {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                           </FormItem>
                         )} />
                       </div>
@@ -1283,7 +1533,12 @@ export default function Checkout() {
                             <FormItem>
                               <FormLabel>Cidade</FormLabel>
                               <FormControl><Input placeholder="São Paulo" className={formErrors.deliveryCity ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                              <FormMessage />
+                              {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                             </FormItem>
                           )} />
                         </div>
@@ -1291,7 +1546,12 @@ export default function Checkout() {
                           <FormItem>
                             <FormLabel>Estado</FormLabel>
                             <FormControl><Input placeholder="SP" maxLength={2} className={formErrors.deliveryState ? "border-destructive focus-visible:ring-destructive/40" : ""} {...field} /></FormControl>
-                            <FormMessage />
+                            {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                           </FormItem>
                         )} />
                       </div>
@@ -1300,7 +1560,12 @@ export default function Checkout() {
                         <FormItem>
                           <FormLabel>Complemento (opcional)</FormLabel>
                           <FormControl><Input placeholder="Apto 12, Bloco B" {...field} /></FormControl>
-                          <FormMessage />
+                          {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                         </FormItem>
                       )} />
 
@@ -1308,7 +1573,12 @@ export default function Checkout() {
                         <FormItem>
                           <FormLabel>Referência (opcional)</FormLabel>
                           <FormControl><Input placeholder="Próximo ao mercado" {...field} /></FormControl>
-                          <FormMessage />
+                          {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
+                      <FormMessage />
                         </FormItem>
                       )} />
                     </div>
@@ -1318,6 +1588,11 @@ export default function Checkout() {
                     <FormItem>
                       <FormLabel>Observações (opcional)</FormLabel>
                       <FormControl><Textarea placeholder="Ex: sem cebola, ponto da carne..." {...field} /></FormControl>
+                      {!acceptingOrdersNow && (
+                        <p className="text-xs text-amber-700">
+                          Loja fechada agora. Pedido imediato travado; só agendamento para amanhã.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -1327,7 +1602,15 @@ export default function Checkout() {
                     className="w-full h-12 text-base"
                     disabled={!canSubmitOrder}
                   >
-                    {isSubmittingOrder ? "Enviando pedido..." : "Enviar pedido no WhatsApp"}
+                    {isSubmittingOrder
+                      ? "Fechando pedido..."
+                      : shouldUseInAppPayment
+                        ? "Fechar e pagar no app"
+                        : canUseManualPixFallback
+                          ? "Fechar pedido e ver chave PIX"
+                          : fulfillmentMode === "scheduled"
+                            ? "Agendar pedido"
+                            : "Enviar pedido no WhatsApp"}
                   </Button>
                   {deliveryUnavailable && (
                     <p className="text-xs text-destructive" role="status">
@@ -1339,6 +1622,18 @@ export default function Checkout() {
                       Loja lotada agora. Você pode agendar o pedido para mais tarde.
                     </p>
                   )}
+{checkoutSubmitError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-2" role="status" aria-live="polite">
+                      <p className="text-sm text-destructive">{checkoutSubmitError}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCheckoutSubmitError(null)}
+                      >
+                        Entendi
+                      </Button>
+                    </div>
+                  ) : null}
                 </form>
               </Form>
             </CardContent>
@@ -1358,12 +1653,24 @@ export default function Checkout() {
             className="ml-auto"
             disabled={!canSubmitOrder}
           >
-            {isSubmittingOrder ? "Enviando..." : "Finalizar pedido"}
+            {isSubmittingOrder
+              ? "Fechando..."
+              : shouldUseInAppPayment
+                ? "Pagar no app"
+                : canUseManualPixFallback
+                  ? "Ver chave PIX"
+                  : fulfillmentMode === "scheduled"
+                    ? "Agendar pedido"
+                    : "Finalizar pedido"}
           </Button>
         </div>
       </div>
     </div>
   );
 }
+
+
+
+
 
 

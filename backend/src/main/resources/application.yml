@@ -21,6 +21,12 @@ automation:
 payments:
   api-public-base-url: ${PAYMENTS_API_PUBLIC_BASE_URL:}
   allowed-origins: ${PAYMENTS_ALLOWED_ORIGINS:http://localhost:8080,http://127.0.0.1:8080}
+  checkout-rate-limit-max: ${PAYMENTS_CHECKOUT_RATE_LIMIT_MAX:20}
+  checkout-rate-limit-window-seconds: ${PAYMENTS_CHECKOUT_RATE_LIMIT_WINDOW_SECONDS:60}
+  revalidate-rate-limit-max: ${PAYMENTS_REVALIDATE_RATE_LIMIT_MAX:30}
+  revalidate-rate-limit-window-seconds: ${PAYMENTS_REVALIDATE_RATE_LIMIT_WINDOW_SECONDS:60}
+  mercadopago-retry-max-attempts: ${MERCADOPAGO_RETRY_MAX_ATTEMPTS:3}
+  mercadopago-retry-base-delay-ms: ${MERCADOPAGO_RETRY_BASE_DELAY_MS:250}
   mercadopago-access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
   mercadopago-api-base-url: ${MERCADOPAGO_API_BASE_URL:https://api.mercadopago.com}
   mercadopago-webhook-token: ${MERCADOPAGO_WEBHOOK_TOKEN:}

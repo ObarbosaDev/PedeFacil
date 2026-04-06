@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { ArrowRight, BarChart3, Eye, EyeOff, Lock, MessageCircle, ShieldCheck, Store } from "lucide-react";
 import { getFriendlyAuthError } from "@/lib/auth-errors";
+import { getRoleMismatchMessage, getUserRole } from "@/lib/auth-role";
 import { trackProductEvent } from "@/lib/product-analytics";
 
 const loginSchema = z.object({
@@ -72,6 +73,10 @@ export default function Login() {
       const { data: userResponse } = await supabase.auth.getUser();
       const currentUser = userResponse.user;
       if (!currentUser) throw new Error("Sessão inválida após login.");
+      if (getUserRole(currentUser) !== "store_owner") {
+        await signOut();
+        throw new Error(getRoleMismatchMessage("store_owner"));
+      }
 
       const settings = await getSecuritySettings(currentUser.id);
       if (settings.otp_enabled) {
@@ -118,6 +123,10 @@ export default function Login() {
       const { data: userResponse } = await supabase.auth.getUser();
       const loggedUser = userResponse.user;
       if (!loggedUser) throw new Error("Não rolou validar seu acesso.");
+      if (getUserRole(loggedUser) !== "store_owner") {
+        await signOut();
+        throw new Error(getRoleMismatchMessage("store_owner"));
+      }
 
       if (trustThisDevice) {
         await trustCurrentDevice(loggedUser.id);
@@ -152,7 +161,7 @@ export default function Login() {
     <AuthSplitLayout
       leftEyebrow="Acesso do lojista"
       leftTitle="Seu painel de pedidos, com cara de operação grande."
-      leftDescription="Entre para acompanhar pedidos, atualizar cardápio e tocar a loja com visão clara do que importa."
+      leftDescription="Entre para tocar pedidos, cardápio e operação com visão clara do que realmente importa."
       leftHighlights={[
         { icon: MessageCircle, text: "Pedido chega no WhatsApp já organizadinho." },
         { icon: BarChart3, text: "Leitura da operação em tempo real, sem adivinhação." },
@@ -160,7 +169,7 @@ export default function Login() {
       ]}
       formEyebrow="Acesso do lojista"
       formTitle={otpStep ? "Confirmação de segurança" : "Bora entrar no painel?"}
-      formDescription={otpStep ? "Digite o código enviado no e-mail para liberar seu acesso." : "Coloque seus dados e continue de onde parou."}
+      formDescription={otpStep ? "Digite o código enviado no e-mail para liberar seu acesso." : "Coloque seus dados e volta pro jogo."}
       formIcon={Store}
       backTo="/"
       backLabel="Voltar para início"
@@ -194,7 +203,7 @@ export default function Login() {
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Senha</FormLabel>
-                    <Link to="/esqueci-senha" className="text-xs text-zinc-300 hover:text-zinc-100 hover:underline">
+                    <Link to="/esqueci-senha" className="text-xs text-zinc-200 hover:text-zinc-100 hover:underline">
                       Esqueci minha senha
                     </Link>
                   </div>
@@ -215,7 +224,7 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((value) => !value)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
                         aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -249,9 +258,9 @@ export default function Login() {
               </p>
             ) : null}
 
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-300">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-200">
               <p className="font-semibold">Proteção ativa</p>
-              <p className="mt-1">Bloqueio temporário após tentativas seguidas e autenticação com sessão segura.</p>
+              <p className="mt-1">Bloqueio temporário contra tentativa em sequência e autenticação com sessão segura.</p>
             </div>
           </form>
         </Form>
@@ -259,7 +268,7 @@ export default function Login() {
         <div className="space-y-4">
           <div>
             <p className="text-sm text-zinc-200">Confirmação por código</p>
-            <p className="text-xs text-zinc-300 mt-1">
+            <p className="text-xs text-zinc-200 mt-1">
               Enviamos um código de 6 dígitos para <span className="font-semibold text-zinc-200">{otpEmail}</span>.
             </p>
           </div>
@@ -277,7 +286,7 @@ export default function Login() {
             </InputOTP>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <label className="flex items-center gap-2 text-sm text-zinc-200">
             <input
               type="checkbox"
               checked={trustThisDevice}
@@ -309,7 +318,7 @@ export default function Login() {
         </div>
       )}
 
-      <p className="text-center text-sm text-zinc-300 leading-relaxed">
+      <p className="text-center text-sm text-zinc-200 leading-relaxed">
         Ainda não tem conta?{" "}
         <Link
           to={`/registro${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
@@ -321,6 +330,9 @@ export default function Login() {
     </AuthSplitLayout>
   );
 }
+
+
+
 
 
 

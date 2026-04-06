@@ -22,7 +22,7 @@ interface WhatsAppOrderData {
   discountAmount?: number;
   deliveryFee?: number;
   serviceFee?: number;
-  paymentMethod?: "pix" | "credit_card" | "debit_card" | "cash";
+  paymentMethod?: "pix" | "credit_card" | "debit_card" | "cash" | "meal_voucher";
   couponCode?: string;
   total: number;
 }
@@ -56,6 +56,7 @@ export function generateWhatsAppMessage(data: WhatsAppOrderData): string {
     credit_card: "Cartão de crédito",
     debit_card: "Cartão de débito",
     cash: "Dinheiro",
+    meal_voucher: "Vale alimentação",
   };
   const paymentLine = data.paymentMethod ? `*Pagamento:* ${paymentLabels[data.paymentMethod]}\n` : "";
 

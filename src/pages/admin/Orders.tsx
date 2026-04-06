@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import StatusBadge from "@/components/dashboard/StatusBadge";
-import { formatCurrency, formatDate, ORDER_STATUS_LABELS } from "@/lib/formatters";
+import { formatCurrency, formatDate, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/formatters";
 import { logAuditEvent } from "@/lib/observability";
+import { buildWhatsAppSupportLink } from "@/lib/support";
 import { toast } from "sonner";
 
 const statusFlow = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 const kanbanColumns = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 const pageSize = 50;
+const orderStatusFilterOptions = [
+  { value: "all", label: "Todos os status" },
+  { value: "received", label: "Recebidos" },
+  { value: "confirmed", label: "Confirmados" },
+  { value: "in_preparation", label: "Em preparo" },
+  { value: "ready", label: "Prontos" },
+  { value: "delivered", label: "Entregues" },
+  { value: "cancelled", label: "Cancelados" },
+] as const;
 
 const defaultSlaByStatus: Record<string, number> = {
   received: 5,
@@ -43,6 +53,33 @@ const quickStatusActions: Record<string, { label: string; next: string }[]> = {
   ready: [{ label: "Concluir", next: "delivered" }],
   delivered: [],
 };
+
+function escapeCsv(value: unknown) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>) {
+  const csv = [headers.map(escapeCsv).join(";"), ...rows.map((row) => row.map(escapeCsv).join(";"))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildCustomerWhatsAppUrl(phone: string, customerName?: string) {
+  const sanitized = String(phone || "").replace(/\D/g, "");
+  const withCountryCode = sanitized.startsWith("55") ? sanitized : `55${sanitized}`;
+  const message = encodeURIComponent(
+    `Oi${customerName ? `, ${customerName}` : ""}. Aqui é da operação da Pede Fácil. Estamos falando sobre o seu pedido.`
+  );
+  return `https://wa.me/${withCountryCode}?text=${message}`;
+}
 
 function getSlaColumnTone(lateRatio: number) {
   if (lateRatio >= 0.4) {
@@ -117,16 +154,20 @@ export default function Orders() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "pickup" | "delivery">("all");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [driverFilter, setDriverFilter] = useState<string>("all");
   const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const hasBootstrappedOrders = useRef(false);
   const knownOrderIds = useRef<Set<string>>(new Set());
   const autoRedispatchingOrderIds = useRef<Set<string>>(new Set());
   const previousLateCount = useRef(0);
+  const invalidateTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, orderTypeFilter]);
+  }, [searchTerm, orderTypeFilter, paymentMethodFilter, statusFilter, driverFilter]);
 
   const { data: establishment } = useQuery({
     queryKey: ["my-establishment"],
@@ -135,7 +176,14 @@ export default function Orders() {
       return data;
     },
     enabled: !!user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
+
+  const canUseSharedFleet = useMemo(() => {
+    const mode = String((establishment as any)?.delivery_operation_mode || "own_fleet");
+    return mode === "shared_fleet" || mode === "hybrid";
+  }, [establishment]);
 
   const { data: slaSettings } = useQuery({
     queryKey: ["establishment-sla-settings", establishment?.id],
@@ -149,21 +197,44 @@ export default function Orders() {
       return data;
     },
     enabled: !!establishment,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: deliveryDrivers = [] } = useQuery({
-    queryKey: ["delivery-drivers", establishment?.id],
+    queryKey: ["delivery-drivers", establishment?.id, canUseSharedFleet],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("delivery_drivers")
         .select("*")
-        .eq("establishment_id", establishment!.id)
         .eq("is_active", true)
         .order("full_name");
+      query = canUseSharedFleet
+        ? query.or(`establishment_id.eq.${establishment!.id},establishment_id.is.null`)
+        : query.eq("establishment_id", establishment!.id);
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     enabled: !!establishment,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: driverReputationRows = [] } = useQuery({
+    queryKey: ["driver-reputation-metrics", establishment?.id, canUseSharedFleet],
+    queryFn: async () => {
+      let query = (supabase as any).from("driver_reputation_metrics").select("*");
+      query = canUseSharedFleet
+        ? query.or(`establishment_id.eq.${establishment!.id},establishment_id.is.null`)
+        : query.eq("establishment_id", establishment!.id);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!establishment,
+    staleTime: 45_000,
+    refetchOnWindowFocus: false,
   });
 
   const ordersQuery = useQuery({
@@ -195,6 +266,8 @@ export default function Orders() {
       return { rows: data || [], count: count || 0 };
     },
     enabled: !!establishment,
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
   });
 
   const orders = ordersQuery.data?.rows || [];
@@ -208,6 +281,18 @@ export default function Orders() {
   useEffect(() => {
     if (!establishment?.id) return;
 
+    const scheduleRealtimeInvalidation = () => {
+      if (invalidateTimerRef.current) return;
+      invalidateTimerRef.current = window.setTimeout(() => {
+        invalidateTimerRef.current = null;
+        queryClient.invalidateQueries({ queryKey: ["orders", establishment.id] });
+        queryClient.invalidateQueries({ queryKey: ["order-history", establishment.id] });
+        queryClient.invalidateQueries({ queryKey: ["order-deliveries", establishment.id] });
+        queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment.id] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-orders", establishment.id] });
+      }, 350);
+    };
+
     const channel = supabase
       .channel(`orders-realtime-${establishment.id}`)
       .on(
@@ -219,13 +304,7 @@ export default function Orders() {
           filter: `establishment_id=eq.${establishment.id}`,
         },
         (payload: any) => {
-          queryClient.invalidateQueries({ queryKey: ["orders", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-orders", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-period-orders", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-period-items", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["order-history", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["order-deliveries", establishment.id] });
-          queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment.id] });
+          scheduleRealtimeInvalidation();
 
           if (payload.eventType === "INSERT") {
             const newest = payload.new;
@@ -249,6 +328,10 @@ export default function Orders() {
       .subscribe();
 
     return () => {
+      if (invalidateTimerRef.current) {
+        window.clearTimeout(invalidateTimerRef.current);
+        invalidateTimerRef.current = null;
+      }
       void supabase.removeChannel(channel);
     };
   }, [establishment?.id, queryClient]);
@@ -292,9 +375,34 @@ export default function Orders() {
     },
   });
 
+  const confirmPaymentMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await (supabase as any)
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", establishment?.id] });
+      queryClient.invalidateQueries({ queryKey: ["order-history", establishment?.id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-orders", establishment?.id] });
+      toast.success("Pagamento confirmado no pedido.");
+    },
+    onError: (error: any) => toast.error(error.message || "Não rolou confirmar o pagamento."),
+  });
+
   const dispatchDelivery = useMutation({
     mutationFn: async ({ orderId, driverId }: { orderId: string; driverId: string }) => {
       const selectedDriver = (deliveryDrivers as any[]).find((driver) => driver.id === driverId);
+      const dispatchTimeoutSeconds = Math.min(
+        300,
+        Math.max(15, Number((establishment as any)?.dispatch_timeout_seconds || 30))
+      );
+      const defaultDriverPayout = Math.max(0, Number((establishment as any)?.default_driver_payout || 0));
       const { data: currentDelivery, error: currentDeliveryError } = await (supabase as any)
         .from("order_deliveries")
         .select("*")
@@ -312,10 +420,10 @@ export default function Orders() {
           driver_id: driverId,
           status: "assigned",
           assigned_at: new Date().toISOString(),
-          accepted_deadline_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          accepted_deadline_at: new Date(Date.now() + dispatchTimeoutSeconds * 1000).toISOString(),
           tracking_token: trackingToken,
           confirmation_code: confirmationCode,
-          payout_amount: Number(selectedDriver?.payout_per_delivery || 0),
+          payout_amount: Number(selectedDriver?.payout_per_delivery || defaultDriverPayout),
           eta_minutes: 35,
           accepted_at: null,
           arrived_at_store_at: null,
@@ -394,7 +502,13 @@ export default function Orders() {
             id,
             full_name,
             phone,
-            is_available
+            is_available,
+            vehicle_type,
+            vehicle_brand,
+            vehicle_model,
+            vehicle_color,
+            license_plate,
+            avatar_url
           )
         `)
         .eq("establishment_id", establishment!.id)
@@ -403,6 +517,8 @@ export default function Orders() {
       return data || [];
     },
     enabled: !!establishment && orderIds.length > 0,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: historyRows = [] } = useQuery({
@@ -421,6 +537,8 @@ export default function Orders() {
       return data || [];
     },
     enabled: !!establishment && orderIds.length > 0,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
   });
 
   const historyByOrder = useMemo(() => {
@@ -449,8 +567,59 @@ export default function Orders() {
     return map;
   }, [orderDeliveries]);
 
+  const driverReputationById = useMemo(() => {
+    return (driverReputationRows as any[]).reduce<Record<string, any>>((acc, row: any) => {
+      acc[row.driver_id] = row;
+      return acc;
+    }, {});
+  }, [driverReputationRows]);
+
+  const localDispatchDrivers = useMemo(() => {
+    return (deliveryDrivers as any[]).filter((driver) => driver.establishment_id === establishment?.id);
+  }, [deliveryDrivers, establishment?.id]);
+
+  const scoreDriverForDispatch = (driver: any, currentAssignedDriverId?: string | null) => {
+    const load = activeDeliveriesByDriver[driver.id] || 0;
+    const reputation = driverReputationById[driver.id];
+    const avgRating = Number(reputation?.avg_rating || 0);
+    const completed = Number(reputation?.deliveries_completed || 0);
+    const lateAcceptances = Number(reputation?.late_acceptances || 0);
+    const isSharedDriver = !driver.establishment_id;
+    const isCurrentDriver = !!currentAssignedDriverId && driver.id === currentAssignedDriverId;
+
+    let score = 0;
+    score += driver.availability_mode === "online" ? 500 : driver.availability_mode === "busy" ? 150 : -500;
+    score -= load * 120;
+    score += Math.min(completed, 60) * 3;
+    score += avgRating * 30;
+    score -= lateAcceptances * 18;
+    score += isSharedDriver ? (String((establishment as any)?.delivery_operation_mode || "") === "shared_fleet" ? 35 : -10) : 40;
+    if (isCurrentDriver) score -= 1000;
+
+    return score;
+  };
+
+  const getBestDispatchDriver = (currentAssignedDriverId?: string | null, sourceDrivers?: any[]) => {
+    const ranked = [...(sourceDrivers || (deliveryDrivers as any[]))]
+      .filter((driver) => {
+        if (!driver.is_active) return false;
+        if (!["online", "busy"].includes(driver.availability_mode || "")) return false;
+        const load = activeDeliveriesByDriver[driver.id] || 0;
+        const capacity = Number(driver.max_active_deliveries || 1);
+        return load < capacity;
+      })
+      .map((driver) => ({
+        ...driver,
+        dispatchScore: scoreDriverForDispatch(driver, currentAssignedDriverId),
+      }))
+      .sort((a, b) => b.dispatchScore - a.dispatchScore);
+
+    return ranked[0] || null;
+  };
+
   useEffect(() => {
     if (!establishment?.id || !(orderDeliveries as any[]).length || !(deliveryDrivers as any[]).length) return;
+    if ((establishment as any)?.auto_dispatch_enabled === false) return;
 
     const expiredAssignedDeliveries = (orderDeliveries as any[]).filter((delivery) => {
       if (delivery.status !== "assigned" || !delivery.accepted_deadline_at) return false;
@@ -463,25 +632,7 @@ export default function Orders() {
       for (const delivery of expiredAssignedDeliveries) {
         if (autoRedispatchingOrderIds.current.has(delivery.order_id)) continue;
 
-        const candidateDrivers = [...(deliveryDrivers as any[])]
-          .filter((driver) => {
-            if (!driver.is_active) return false;
-            if (!["online", "busy"].includes(driver.availability_mode || "")) return false;
-            if (driver.id === delivery.driver_id) return false;
-            const currentLoad = activeDeliveriesByDriver[driver.id] || 0;
-            const capacity = Number(driver.max_active_deliveries || 1);
-            return currentLoad < capacity;
-          })
-          .sort((a, b) => {
-            const aLoad = activeDeliveriesByDriver[a.id] || 0;
-            const bLoad = activeDeliveriesByDriver[b.id] || 0;
-            if (a.availability_mode !== b.availability_mode) {
-              return a.availability_mode === "online" ? -1 : 1;
-            }
-            return aLoad - bLoad;
-          });
-
-        const bestDriver = candidateDrivers[0];
+        const bestDriver = getBestDispatchDriver(delivery.driver_id, localDispatchDrivers);
         if (!bestDriver) continue;
 
         autoRedispatchingOrderIds.current.add(delivery.order_id);
@@ -498,10 +649,11 @@ export default function Orders() {
     };
 
     void run();
-  }, [activeDeliveriesByDriver, deliveryDrivers, dispatchDelivery, establishment?.id, orderDeliveries]);
+  }, [dispatchDelivery, establishment?.id, orderDeliveries, localDispatchDrivers, activeDeliveriesByDriver, driverReputationById]);
 
   useEffect(() => {
     if (!establishment?.id || !(deliveryDrivers as any[]).length || !orders.length) return;
+    if ((establishment as any)?.auto_dispatch_enabled === false) return;
 
     const ordersWithoutDispatch = orders.filter((order: any) => {
       if (order.order_type !== "delivery") return false;
@@ -515,24 +667,7 @@ export default function Orders() {
       for (const order of ordersWithoutDispatch) {
         if (autoRedispatchingOrderIds.current.has(order.id)) continue;
 
-        const candidateDrivers = [...(deliveryDrivers as any[])]
-          .filter((driver) => {
-            if (!driver.is_active) return false;
-            if (!["online", "busy"].includes(driver.availability_mode || "")) return false;
-            const load = activeDeliveriesByDriver[driver.id] || 0;
-            const capacity = Number(driver.max_active_deliveries || 1);
-            return load < capacity;
-          })
-          .sort((a, b) => {
-            const loadA = activeDeliveriesByDriver[a.id] || 0;
-            const loadB = activeDeliveriesByDriver[b.id] || 0;
-            if (a.availability_mode !== b.availability_mode) {
-              return a.availability_mode === "online" ? -1 : 1;
-            }
-            return loadA - loadB;
-          });
-
-        const bestDriver = candidateDrivers[0];
+        const bestDriver = getBestDispatchDriver(undefined, localDispatchDrivers);
         if (!bestDriver) continue;
 
         autoRedispatchingOrderIds.current.add(order.id);
@@ -548,7 +683,7 @@ export default function Orders() {
     };
 
     void run();
-  }, [activeDeliveriesByDriver, deliveryByOrderId, deliveryDrivers, dispatchDelivery, establishment?.id, orders]);
+  }, [dispatchDelivery, establishment?.id, orders, deliveryByOrderId, localDispatchDrivers, activeDeliveriesByDriver, driverReputationById]);
 
   const slaByStatus = useMemo(() => ({
     received: Number(slaSettings?.received_minutes || defaultSlaByStatus.received),
@@ -578,8 +713,29 @@ export default function Orders() {
     return { elapsedMinutes, limitMinutes, overtime, isLate: overtime > 0 };
   };
 
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order: any) => {
+      if (statusFilter !== "all" && String(order.status || "") !== statusFilter) return false;
+      if (paymentMethodFilter === "all") return true;
+      const paymentMatches = String(order.payment_method || "") === paymentMethodFilter;
+      if (!paymentMatches) return false;
+      return true;
+    });
+  }, [orders, paymentMethodFilter, statusFilter]);
+
+  const driverFilteredOrders = useMemo(() => {
+    return filteredOrders.filter((order: any) => {
+      if (driverFilter === "all") return true;
+      const delivery = deliveryByOrderId[order.id];
+      if (driverFilter === "unassigned") {
+        return order.order_type === "delivery" && !delivery?.driver_id;
+      }
+      return delivery?.driver_id === driverFilter;
+    });
+  }, [deliveryByOrderId, driverFilter, filteredOrders]);
+
   const ordersByStatus = kanbanColumns.map((status) => {
-    const columnOrders = orders.filter((order: any) => {
+    const columnOrders = driverFilteredOrders.filter((order: any) => {
       const isScheduledOpen =
         Boolean(order.is_scheduled) &&
         Boolean(order.scheduled_for) &&
@@ -604,8 +760,8 @@ export default function Orders() {
     };
   });
 
-  const cancelledOrders = orders.filter((order: any) => order.status === "cancelled");
-  const lateOrders = orders.filter((order: any) => {
+  const cancelledOrders = driverFilteredOrders.filter((order: any) => order.status === "cancelled");
+  const lateOrders = driverFilteredOrders.filter((order: any) => {
     const slaInfo = getSlaInfo(order);
     return Boolean(slaInfo?.isLate);
   });
@@ -620,16 +776,16 @@ export default function Orders() {
   }, [lateOrders.length]);
 
   const summary = useMemo(() => {
-    const inProgress = orders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
-    const delivered = orders.filter((o: any) => o.status === "delivered").length;
-    const scheduledOpen = orders.filter((o: any) => {
+    const inProgress = driverFilteredOrders.filter((o: any) => !["delivered", "cancelled"].includes(o.status)).length;
+    const delivered = driverFilteredOrders.filter((o: any) => o.status === "delivered").length;
+    const scheduledOpen = driverFilteredOrders.filter((o: any) => {
       if (!o.is_scheduled || !o.scheduled_for) return false;
       if (["delivered", "cancelled"].includes(o.status)) return false;
       return new Date(o.scheduled_for).getTime() > Date.now();
     }).length;
 
     return {
-      total: totalCount,
+      total: driverFilteredOrders.length,
       inProgress,
       delivered,
       cancelled: cancelledOrders.length,
@@ -637,20 +793,116 @@ export default function Orders() {
       driversOnline: (deliveryDrivers as any[]).filter((driver) => driver.is_active && ["online", "busy"].includes(driver.availability_mode || "")).length,
       deliveriesInRoute: (orderDeliveries as any[]).filter((delivery) => ["assigned", "accepted", "picked_up"].includes(delivery.status)).length,
     };
-  }, [orders, cancelledOrders.length, totalCount, deliveryDrivers, orderDeliveries]);
+  }, [driverFilteredOrders, cancelledOrders.length, deliveryDrivers, orderDeliveries]);
 
   const scheduledOrders = useMemo(() => {
-    return orders
+    return driverFilteredOrders
       .filter((order: any) => {
         if (!order.is_scheduled || !order.scheduled_for) return false;
         if (["delivered", "cancelled"].includes(order.status)) return false;
         return new Date(order.scheduled_for).getTime() > Date.now();
       })
       .sort((a: any, b: any) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime());
-  }, [orders]);
+  }, [driverFilteredOrders]);
+
+  const exportOrdersCsv = () => {
+    downloadCsv(
+      `kanban-pedidos-pagina-${page}.csv`,
+      [
+        "pedido_id",
+        "cliente",
+        "telefone",
+        "status",
+        "tipo",
+        "pagamento_status",
+        "metodo_pagamento",
+        "total",
+        "criado_em",
+        "entregador",
+      ],
+      driverFilteredOrders.map((order: any) => [
+        order.id,
+        order.customer_name,
+        order.customer_phone,
+        order.status,
+        order.order_type,
+        order.payment_status,
+        order.payment_method,
+        order.total,
+        order.created_at,
+        deliveryByOrderId[order.id]?.delivery_drivers?.full_name || "",
+      ])
+    );
+    toast.success("CSV do Kanban gerado.");
+  };
+
+  const exportScheduledOrdersCsv = () => {
+    downloadCsv(
+      `pedidos-agendados-pagina-${page}.csv`,
+      ["pedido_id", "cliente", "telefone", "tipo", "status", "agendado_para", "metodo_pagamento", "total"],
+      scheduledOrders.map((order: any) => [
+        order.id,
+        order.customer_name,
+        order.customer_phone,
+        order.order_type,
+        order.status,
+        order.scheduled_for,
+        order.payment_method,
+        order.total,
+      ])
+    );
+    toast.success("CSV de agendados gerado.");
+  };
+
+  const exportCancelledOrdersCsv = () => {
+    downloadCsv(
+      `cancelamentos-pagina-${page}.csv`,
+      ["pedido_id", "cliente", "telefone", "tipo", "metodo_pagamento", "total", "criado_em"],
+      cancelledOrders.map((order: any) => [
+        order.id,
+        order.customer_name,
+        order.customer_phone,
+        order.order_type,
+        order.payment_method,
+        order.total,
+        order.created_at,
+      ])
+    );
+    toast.success("CSV de cancelamentos gerado.");
+  };
+
+  const kanbanClosingText = useMemo(() => {
+    return [
+      "Fechamento do Kanban",
+      `Pedidos visíveis: ${summary.total}`,
+      `Em andamento: ${summary.inProgress}`,
+      `Entregues: ${summary.delivered}`,
+      `Cancelados: ${summary.cancelled}`,
+      `Agendados: ${summary.scheduledOpen}`,
+      `Frota online: ${summary.driversOnline}`,
+      `Rotas ativas: ${summary.deliveriesInRoute}`,
+      `Filtro de tipo: ${orderTypeFilter === "all" ? "Todos os tipos" : orderTypeFilter === "pickup" ? "Retirada" : "Entrega"}`,
+      `Filtro de pagamento: ${paymentMethodFilter === "all" ? "Todos os meios" : PAYMENT_METHOD_LABELS[paymentMethodFilter as keyof typeof PAYMENT_METHOD_LABELS] || paymentMethodFilter}`,
+      `Filtro de status: ${orderStatusFilterOptions.find((option) => option.value === statusFilter)?.label || "Todos os status"}`,
+      `Filtro de entregador: ${driverFilter === "all" ? "Todos" : driverFilter === "unassigned" ? "Sem entregador" : ((deliveryDrivers as any[]).find((driver) => driver.id === driverFilter)?.full_name || "Entregador filtrado")}`,
+    ].join("\n");
+  }, [driverFilter, orderTypeFilter, paymentMethodFilter, statusFilter, summary, deliveryDrivers]);
+
+  const copyKanbanClosing = async () => {
+    try {
+      await navigator.clipboard.writeText(kanbanClosingText);
+      toast.success("Fechamento do Kanban copiado.");
+    } catch {
+      toast.error("Não rolou copiar o fechamento do Kanban.");
+    }
+  };
+
+  const shareKanbanClosing = () => {
+    window.open(buildWhatsAppSupportLink(kanbanClosingText), "_blank", "noopener,noreferrer");
+  };
 
   if (!establishment) {
-    return <p className="text-muted-foreground text-center py-12">Configura sua loja primeiro.</p>;
+    return <p className="text-muted-foreground text-center py-12">Configura sua loja primeiro para liberar essa visão.</p>;
   }
 
   const fromItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -660,8 +912,8 @@ export default function Orders() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Central de pedidos</h1>
-          <p className="text-muted-foreground">Atualização em tempo real para você tocar a operação no ritmo certo.</p>
+          <h1 className="text-3xl font-bold">Central de pedidos em tempo real</h1>
+          <p className="text-muted-foreground">Atualização em tempo real para você tocar a operação sem perder o timing.</p>
         </div>
         <Link to="/admin/incidentes">
           <Button variant="outline" size="sm">Ver incidentes</Button>
@@ -669,7 +921,7 @@ export default function Orders() {
       </div>
 
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-7 gap-3">
           <div className="md:col-span-2">
             <Input
               placeholder="Buscar por nome ou telefone..."
@@ -689,15 +941,82 @@ export default function Orders() {
             </SelectContent>
           </Select>
 
+          <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os meios</SelectItem>
+              <SelectItem value="pix">PIX</SelectItem>
+              <SelectItem value="credit_card">Cartão de crédito</SelectItem>
+              <SelectItem value="debit_card">Cartão de débito</SelectItem>
+              <SelectItem value="money">Dinheiro</SelectItem>
+              <SelectItem value="meal_voucher">Vale alimentação</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {orderStatusFilterOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={driverFilter} onValueChange={setDriverFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os entregadores</SelectItem>
+              <SelectItem value="unassigned">Sem entregador</SelectItem>
+              {(deliveryDrivers as any[]).map((driver) => (
+                <SelectItem key={driver.id} value={driver.id}>
+                  {driver.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Button
             variant="outline"
             onClick={() => {
               setSearchTerm("");
               setOrderTypeFilter("all");
+              setPaymentMethodFilter("all");
+              setStatusFilter("all");
+              setDriverFilter("all");
             }}
           >
             Limpar filtros
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="font-semibold">Fechamento rápido do Kanban</p>
+            <p className="text-sm text-muted-foreground">
+              {summary.total} pedido(s) visíveis, {summary.inProgress} em andamento, {summary.delivered} entregues e {summary.cancelled} cancelados.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => void copyKanbanClosing()}>
+              Copiar fechamento
+            </Button>
+            <Button variant="outline" onClick={shareKanbanClosing}>
+              Mandar no WhatsApp
+            </Button>
+            <Button variant="outline" onClick={exportOrdersCsv}>
+              Exportar CSV do Kanban
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -714,7 +1033,12 @@ export default function Orders() {
       {scheduledOrders.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Pedidos agendados</CardTitle>
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span>Pedidos agendados</span>
+              <Button variant="outline" size="sm" onClick={exportScheduledOrdersCsv}>
+                Exportar agendados
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {scheduledOrders.map((order: any) => (
@@ -772,7 +1096,7 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      {orders.length === 0 ? (
+      {driverFilteredOrders.length === 0 ? (
         <Card>
           <CardContent className="py-14 text-center text-muted-foreground">Nenhum pedido encontrado com esses filtros.</CardContent>
         </Card>
@@ -816,14 +1140,12 @@ export default function Orders() {
                       const isDeliveryOrder = order.order_type === "delivery";
                       const selectedDriverId = selectedDriverByOrder[order.id] || delivery?.driver_id || "";
                       const canDispatch = isDeliveryOrder && !["delivered", "cancelled"].includes(order.status);
-                      const sortedDrivers = [...(deliveryDrivers as any[])].sort((a, b) => {
-                        const loadA = activeDeliveriesByDriver[a.id] || 0;
-                        const loadB = activeDeliveriesByDriver[b.id] || 0;
-                        const freeA = loadA < Number(a.max_active_deliveries || 1);
-                        const freeB = loadB < Number(b.max_active_deliveries || 1);
-                        if (freeA !== freeB) return freeA ? -1 : 1;
-                        return loadA - loadB;
-                      });
+                      const sortedDrivers = [...(deliveryDrivers as any[])]
+                        .map((driver) => ({
+                          ...driver,
+                          dispatchScore: scoreDriverForDispatch(driver, delivery?.driver_id),
+                        }))
+                        .sort((a, b) => b.dispatchScore - a.dispatchScore);
                       const acceptTimeoutExpired =
                         delivery?.status === "assigned" &&
                         delivery?.accepted_deadline_at &&
@@ -841,20 +1163,82 @@ export default function Orders() {
                             </div>
 
                             <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant={order.payment_status === "paid" ? "default" : "outline"}>
+                                  {order.payment_status === "paid" ? "Pagamento aprovado" : "Pagamento pendente"}
+                                </Badge>
+                                <Badge variant="secondary">
+                                  {PAYMENT_METHOD_LABELS[order.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || order.payment_method || "Forma não informada"}
+                                </Badge>
+                              </div>
                               <p className="text-xs text-muted-foreground">{order.order_type === "pickup" ? "Retirada" : "Entrega"}</p>
                               <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                              {order.payment_status !== "paid" && ["pix", "credit_card", "debit_card"].includes(String(order.payment_method || "")) && (
+                                <p className="text-xs text-amber-700">
+                                  Cobrança digital ainda pendente. Bom acompanhar no financeiro antes de liberar qualquer exceção.
+                                </p>
+                              )}
+                              {order.payment_status !== "paid" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs"
+                                  disabled={confirmPaymentMutation.isPending}
+                                  onClick={() => {
+                                    const ok = window.confirm("Confirmar pagamento deste pedido como aprovado?");
+                                    if (!ok) return;
+                                    confirmPaymentMutation.mutate(order.id);
+                                  }}
+                                >
+                                  Confirmar pagamento
+                                </Button>
+                              )}
                               {order.observation && <p className="text-xs text-muted-foreground line-clamp-2">{order.observation}</p>}
+                              <div className="flex flex-wrap gap-2">
+                                <a href={`tel:${String(order.customer_phone || "").replace(/\D/g, "")}`}>
+                                  <Button size="sm" variant="outline">Ligar</Button>
+                                </a>
+                                <a href={buildCustomerWhatsAppUrl(order.customer_phone, order.customer_name)} target="_blank" rel="noreferrer">
+                                  <Button size="sm" variant="outline">WhatsApp</Button>
+                                </a>
+                              </div>
                               {delivery && (
                                 <div className="rounded-md border p-2 mt-1">
-                                  <p className="text-[11px] text-muted-foreground">
-                                    Entregador: <span className="font-semibold text-foreground">{delivery.delivery_drivers?.full_name || "Sem nome"}</span>
-                                  </p>
+                                  <div className="mb-2 flex items-center gap-2">
+                                    {delivery.delivery_drivers?.avatar_url ? (
+                                      <img
+                                        src={delivery.delivery_drivers.avatar_url}
+                                        alt={delivery.delivery_drivers?.full_name || "Entregador"}
+                                        className="h-10 w-10 rounded-full border object-cover"
+                                        loading="lazy"
+                                      />
+                                    ) : (
+                                      <div className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted text-[10px] font-semibold text-muted-foreground">
+                                        Moto
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="text-[11px] text-muted-foreground">
+                                        Entregador: <span className="font-semibold text-foreground">{delivery.delivery_drivers?.full_name || "Sem nome"}</span>
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground">
+                                        {[delivery.delivery_drivers?.vehicle_type, delivery.delivery_drivers?.vehicle_brand, delivery.delivery_drivers?.vehicle_model]
+                                          .filter(Boolean)
+                                          .join(" • ") || "Veículo sem detalhes"}
+                                      </p>
+                                    </div>
+                                  </div>
                                   <p className="text-[11px] text-muted-foreground">
                                     Status da rota: {delivery.status === "assigned" ? "Aguardando aceite" : delivery.status === "accepted" ? "Aceita" : delivery.status === "picked_up" ? "Saiu para entrega" : delivery.status}
                                   </p>
+                                  {(delivery.delivery_drivers?.vehicle_color || delivery.delivery_drivers?.license_plate) && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      Identificação: {[delivery.delivery_drivers?.vehicle_color, delivery.delivery_drivers?.license_plate].filter(Boolean).join(" • ")}
+                                    </p>
+                                  )}
                                   {delivery.accepted_deadline_at && delivery.status === "assigned" && (
                                     <p className={`text-[11px] ${acceptTimeoutExpired ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
-                                      Aceite ate: {formatDate(delivery.accepted_deadline_at)}
+                                      Aceite até: {formatDate(delivery.accepted_deadline_at)}
                                     </p>
                                   )}
                                   {acceptTimeoutExpired && (
@@ -874,7 +1258,7 @@ export default function Orders() {
                                   )}
                                   {delivery.issue_reason && (
                                     <p className="text-[11px] text-amber-700">
-                                      Ocorrencia: <span className="font-semibold">{delivery.issue_reason}</span>
+                                      Ocorrência: <span className="font-semibold">{delivery.issue_reason}</span>
                                     </p>
                                   )}
                                   {delivery.proof_image_url && (
@@ -1060,10 +1444,15 @@ export default function Orders() {
                   <span className="text-xs text-muted-foreground">{cancelledOrders.length}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {cancelledOrders.map((order: any) => (
-                  <div key={order.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
-                    <div>
+          <CardContent className="space-y-2">
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={exportCancelledOrdersCsv}>
+                Exportar cancelamentos
+              </Button>
+            </div>
+            {cancelledOrders.map((order: any) => (
+              <div key={order.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
+                <div>
                       <p className="font-medium text-sm">{order.customer_name}</p>
                       <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
                     </div>

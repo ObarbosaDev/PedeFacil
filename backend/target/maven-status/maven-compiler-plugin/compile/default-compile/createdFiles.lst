@@ -1,6 +1,9 @@
 com\pedefacil\automation\AutomationProperties.class
 com\pedefacil\automation\payment\SupabaseAdminClient$StoreSubscriptionRow.class
+com\pedefacil\automation\payment\PaymentsSecurityHeadersFilter.class
 com\pedefacil\automation\payment\PaymentsExceptionHandler.class
+com\pedefacil\automation\payment\PlanPaymentsController$OrderCheckoutRequest.class
+com\pedefacil\automation\payment\SupabaseAdminClient$OrderPaymentSessionRow.class
 META-INF\spring-configuration-metadata.json
 com\pedefacil\automation\OutboundService.class
 com\pedefacil\automation\SignatureService.class
@@ -15,4 +18,5 @@ com\pedefacil\automation\AutomationReceiverApplication.class
 com\pedefacil\automation\payment\MercadoPagoClient$PreferenceResponse.class
 com\pedefacil\automation\payment\MercadoPagoClient$PaymentInfo.class
 com\pedefacil\automation\AutomationController.class
+com\pedefacil\automation\payment\PlanPaymentsController$RevalidateRequest.class
 com\pedefacil\automation\payment\PaymentsProperties.class

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -6,11 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
+import { AuthSplitLayout } from "@/components/auth/AuthSplitLayout";
 
 const schema = z
   .object({
@@ -28,6 +28,9 @@ export default function ResetPassword() {
   const { session, loading: authLoading, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -44,7 +47,7 @@ export default function ResetPassword() {
     try {
       setSaving(true);
       await updatePassword(data.password);
-      toast.success("Senha atualizada com sucesso!");
+      toast.success("Senha atualizada com sucesso.");
       navigate("/login");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Não rolou redefinir sua senha.";
@@ -55,75 +58,114 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Card className="w-full max-w-md border-primary/20 shadow-xl">
-        <CardContent className="p-6 sm:p-8">
-          <div className="mb-4">
-            <div className="flex items-center justify-between">
-              <Link to="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-4 w-4" />
-                Voltar para login
-              </Link>
-              <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
-                Ir para início
-              </Link>
-            </div>
-          </div>
-          <div className="mb-6">
-            <p className="text-sm text-primary font-medium flex items-center gap-2">
-              <Lock className="h-4 w-4" />
-              Nova senha
-            </p>
-            <h1 className="text-2xl font-black mt-1">Redefinir senha</h1>
-            <p className="text-muted-foreground mt-1">Crie uma senha nova para entrar na sua conta.</p>
-          </div>
+    <AuthSplitLayout
+      leftEyebrow="Segurança da conta"
+      leftTitle="Defina uma senha nova e segura."
+      leftDescription="Crie uma senha forte e volte para sua conta com acesso protegido."
+      leftHighlights={[
+        { icon: ShieldCheck, text: "Troca de senha protegida por sessão temporária." },
+        { icon: Lock, text: "Senha forte para reduzir risco de acesso indevido." },
+      ]}
+      formEyebrow="Nova senha"
+      formTitle="Redefinir senha"
+      formDescription="Crie sua nova senha para entrar normalmente de novo."
+      formIcon={Lock}
+      backTo="/login"
+      backLabel="Voltar para login"
+      secondaryTo="/"
+      secondaryLabel="Ir para início"
+      leftTone="dark"
+      formTone="orange"
+      quickPoints={["Sessão temporária", "Senha forte", "Acesso protegido"]}
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nova senha</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Digite sua nova senha"
+                      autoComplete="new-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="pr-11"
+                      onKeyUp={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
+                      onBlur={() => setCapsLockOn(false)}
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                {capsLockOn ? (
+                  <p className="text-xs text-amber-700 inline-flex items-center gap-1">
+                    <Lock className="h-3.5 w-3.5" />
+                    Caps Lock ativado.
+                  </p>
+                ) : null}
+                <p className="text-xs text-zinc-300">{PASSWORD_RULE}</p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nova senha</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Digite sua nova senha" autoComplete="new-password" {...field} />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">{PASSWORD_RULE}</p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirmar senha</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Repita a nova senha"
+                      autoComplete="new-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="pr-11"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-800"
+                      aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirmar senha</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Repita a nova senha" autoComplete="new-password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <Button type="submit" className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" disabled={saving || authLoading || !session}>
+            {saving ? "Salvando..." : "Salvar nova senha"}
+          </Button>
+        </form>
+      </Form>
 
-              <Button type="submit" className="w-full h-11" disabled={saving || authLoading || !session}>
-                {saving ? "Salvando..." : "Salvar nova senha"}
-              </Button>
-            </form>
-          </Form>
-
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            <Link to="/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-              Voltar para login <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+      <p className="text-center text-sm text-zinc-300 leading-relaxed">
+        <Link to="/login" className="text-zinc-100 font-semibold hover:text-white hover:underline inline-flex items-center gap-1">
+          Voltar para login <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 }
-
-
