@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 
 const baseUrl = process.env.VITE_SUPABASE_URL || "";
 const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
