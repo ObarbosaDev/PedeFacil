@@ -102,6 +102,18 @@
       "defaultValue": "https:\/\/api.mercadopago.com"
     },
     {
+      "name": "payments.mercadopago-retry-base-delay-ms",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 250
+    },
+    {
+      "name": "payments.mercadopago-retry-max-attempts",
+      "type": "java.lang.Integer",
+      "sourceType": "com.pedefacil.automation.payment.PaymentsProperties",
+      "defaultValue": 3
+    },
+    {
       "name": "payments.mercadopago-webhook-token",
       "type": "java.lang.String",
       "sourceType": "com.pedefacil.automation.payment.PaymentsProperties"

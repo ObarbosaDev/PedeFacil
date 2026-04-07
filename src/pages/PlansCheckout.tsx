@@ -14,6 +14,7 @@ import {
   getMyStoreSubscription,
   revalidateExternalPlanPayment,
   startPlanCheckout,
+  startStoreTrial,
 } from "@/lib/subscription";
 import { trackProductEvent } from "@/lib/product-analytics";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,6 +162,26 @@ export default function PlansCheckout() {
     },
     onError: (error: any) => {
       const message = error?.message || "Não rolou iniciar seu pagamento agora.";
+      setPaymentError(message);
+      toast.error(message);
+    },
+  });
+
+  const startTrialMutation = useMutation({
+    onMutate: () => setPaymentError(null),
+    mutationFn: async () => {
+      if (!user) throw new Error("Faca login para ativar seu teste gratis.");
+      await enforceActionRateLimit("plans_start_trial", 4, 300);
+      return startStoreTrial({ planSlug: plan.slug, trialDays: 30 });
+    },
+    onSuccess: async (trialSession) => {
+      setCheckout(trialSession);
+      await queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["store-panel-access", user?.id] });
+      toast.success("Teste gratis ativado por 30 dias. Seu painel ja foi liberado.");
+    },
+    onError: (error: any) => {
+      const message = error?.message || "Nao foi possivel ativar o teste gratis agora.";
       setPaymentError(message);
       toast.error(message);
     },
@@ -349,6 +370,13 @@ export default function PlansCheckout() {
                   </Button>
                   <Button
                     variant="outline"
+                    onClick={() => startTrialMutation.mutate()}
+                    disabled={!user || startTrialMutation.isPending || loadingSubscription || isActive}
+                  >
+                    {startTrialMutation.isPending ? "Ativando teste..." : "Testar 30 dias gratis"}
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       void queryClient.invalidateQueries({ queryKey: ["my-store-subscription", user?.id] });
                       void queryClient.invalidateQueries({ queryKey: ["store-panel-access", user?.id] });
@@ -430,6 +458,9 @@ export default function PlansCheckout() {
 
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 Pagamento aprovado libera automaticamente o acesso ao painel do lojista.
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                Quer testar antes de pagar? Ative o teste gratis de 30 dias e use o painel completo agora.
               </div>
 
               {isActive ? (

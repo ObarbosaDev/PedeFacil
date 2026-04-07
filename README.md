@@ -162,6 +162,18 @@ npm run dev
 
 Use a URL exibida no terminal (normalmente `http://localhost:8081` ou `http://localhost:5173`).
 
+## Como Publicar
+
+Para publicar sem Docker:
+
+- Frontend: Vercel
+- Backend Java: Render
+- Supabase: mantem como backend gerenciado
+
+Guia direto:
+
+- `docs/DEPLOY_PRODUCAO.md`
+
 ## Setup de Supabase Novo
 
 Se o projeto antigo do Supabase estiver sem acesso/permissão, siga:
@@ -197,6 +209,7 @@ Antes de homologar ou publicar, aplique todas as migrations do projeto no Supaba
 - `20260402123000_payment_webhook_idempotency_hardening.sql`
 - `20260402132000_start_plan_checkout_rpc_repair.sql`
 - `20260402143000_scale_hardening.sql`
+- `20260406230000_store_trial_30_days.sql`
 
 Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
 

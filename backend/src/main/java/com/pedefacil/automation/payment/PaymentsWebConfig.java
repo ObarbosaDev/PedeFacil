@@ -24,7 +24,13 @@ public class PaymentsWebConfig implements WebMvcConfigurer {
         .toArray(String[]::new);
 
     if (origins.length == 0) {
-      origins = new String[] {"http://localhost:8080", "http://127.0.0.1:8080"};
+      origins =
+          new String[] {
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
+          };
     }
 
     registry.addMapping("/api/payments/**")

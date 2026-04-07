@@ -789,7 +789,7 @@ export default function ClientAccount() {
             <div className="rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold">OTP no login</p>
+                  <p className="font-semibold">Código por e-mail no login</p>
                   <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma o acesso com código no e-mail.</p>
                 </div>
                 <Switch
@@ -817,7 +817,7 @@ export default function ClientAccount() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="font-semibold">Dispositivos confiáveis</p>
-                  <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular o OTP.</p>
+                  <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular o código por e-mail.</p>
                 </div>
                 <Button variant="outline" onClick={() => trustCurrentDeviceMutation.mutate()} disabled={trustCurrentDeviceMutation.isPending}>
                   Confiar neste dispositivo
