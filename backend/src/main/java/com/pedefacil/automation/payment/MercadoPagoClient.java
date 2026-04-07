@@ -169,7 +169,12 @@ public class MercadoPagoClient {
           throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " falhou na comunicacao", ex);
         }
         log.warn("{} com falha de comunicacao (tentativa {}/{}).", operation, attempt, maxAttempts);
-        sleepBackoff(attempt, baseDelayMs);
+        try {
+          sleepBackoff(attempt, baseDelayMs);
+        } catch (InterruptedException interruptedEx) {
+          Thread.currentThread().interrupt();
+          throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " interrompido", interruptedEx);
+        }
       }
     }
     throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,

@@ -114,13 +114,30 @@ export async function startPlanCheckout(input: {
   return data[0] as CheckoutSession;
 }
 
+export async function startStoreTrial(input?: {
+  planSlug?: "essencial" | "profissional" | "premium";
+  trialDays?: number;
+}): Promise<CheckoutSession> {
+  const { data, error } = await (supabase as any).rpc("start_store_trial", {
+    p_plan_slug: input?.planSlug ?? "profissional",
+    p_trial_days: input?.trialDays ?? 30,
+  });
+
+  if (error) throw error;
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Nao foi possivel iniciar seu teste gratis agora.");
+  }
+
+  return data[0] as CheckoutSession;
+}
+
 export async function createExternalPlanCheckout(input: {
   checkoutSessionId: string;
   successUrl: string;
   pendingUrl: string;
   failureUrl: string;
 }): Promise<ExternalCheckoutSession> {
-  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL;
   return fetchJsonWithTimeout<ExternalCheckoutSession>(
     `${apiBase}/api/payments/plan/checkout`,
     {
@@ -143,7 +160,7 @@ export async function revalidateExternalPlanPayment(input: {
   checkoutSessionId: string;
   paymentId?: string;
 }): Promise<{ status: string; payment_status?: string; revalidated: boolean }> {
-  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL;
   return fetchJsonWithTimeout<{ status: string; payment_status?: string; revalidated: boolean }>(
     `${apiBase}/api/payments/plan/revalidate`,
     {

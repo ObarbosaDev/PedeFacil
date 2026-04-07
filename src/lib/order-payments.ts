@@ -53,7 +53,7 @@ async function fetchJsonWithTimeout<T>(
     return payload as T;
   } catch (error: any) {
     if (error?.name === "AbortError") {
-      throw new Error("A conexão demorou além do esperado. Tente de novo em instantes.");
+      throw new Error("A conexao demorou alem do esperado. Tente de novo em instantes.");
     }
     if (error instanceof Error) {
       throw error;
@@ -75,7 +75,7 @@ export async function startOrderCheckoutSession(input: {
 
   if (error) throw error;
   if (!Array.isArray(data) || data.length === 0) {
-    throw new Error("Não foi possível iniciar o pagamento do pedido agora.");
+    throw new Error("Nao foi possivel iniciar o pagamento do pedido agora.");
   }
 
   return data[0] as OrderPaymentSession;
@@ -88,7 +88,7 @@ export async function createExternalOrderCheckout(input: {
   pendingUrl: string;
   failureUrl: string;
 }): Promise<ExternalOrderCheckoutSession> {
-  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL;
   return fetchJsonWithTimeout<ExternalOrderCheckoutSession>(
     `${apiBase}/api/payments/order/checkout`,
     {
@@ -104,7 +104,7 @@ export async function createExternalOrderCheckout(input: {
         failureUrl: input.failureUrl,
       }),
     },
-    "Não foi possível abrir a cobrança do pedido agora."
+    "Nao foi possivel abrir a cobranca do pedido agora."
   );
 }
 
@@ -112,7 +112,7 @@ export async function revalidateExternalOrderPayment(input: {
   checkoutSessionId: string;
   paymentId?: string;
 }): Promise<{ status: string; payment_status?: string; revalidated: boolean; order_id?: string }> {
-  const apiBase = env.VITE_PAYMENTS_API_BASE_URL || "http://localhost:8081";
+  const apiBase = env.VITE_PAYMENTS_API_BASE_URL;
   return fetchJsonWithTimeout<{ status: string; payment_status?: string; revalidated: boolean; order_id?: string }>(
     `${apiBase}/api/payments/order/revalidate`,
     {
@@ -125,6 +125,6 @@ export async function revalidateExternalOrderPayment(input: {
         paymentId: input.paymentId || null,
       }),
     },
-    "Não foi possível atualizar o pagamento do pedido agora."
+    "Nao foi possivel atualizar o pagamento do pedido agora."
   );
 }

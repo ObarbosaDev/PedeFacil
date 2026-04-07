@@ -12,8 +12,6 @@ import {
   Bot,
   Bike,
   Lock,
-  ShieldCheck,
-  Target,
   Siren,
   Medal,
   ReceiptText,
@@ -37,8 +35,6 @@ const navItems: { label: string; icon: any; path: string; feature: PlanFeature }
   { label: "Ledger pagamentos", icon: ReceiptText, path: "/admin/pagamentos/ledger", feature: "dashboard" },
   { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes", feature: "automations" },
   { label: "Suporte Premium", icon: Headset, path: "/admin/suporte", feature: "support" },
-  { label: "Go-live", icon: ShieldCheck, path: "/admin/go-live", feature: "dashboard" },
-  { label: "Roadmap 30/60/90", icon: Target, path: "/admin/roadmap", feature: "dashboard" },
   { label: "Minha Loja", icon: Store, path: "/admin/loja", feature: "store" },
   { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade", feature: "loyalty" },
 ];

@@ -1,4 +1,5 @@
 com\pedefacil\automation\AutomationProperties.class
+com\pedefacil\automation\payment\SupabaseAdminClient$EstablishmentPaymentConfigRow.class
 com\pedefacil\automation\payment\SupabaseAdminClient$StoreSubscriptionRow.class
 com\pedefacil\automation\payment\PaymentsSecurityHeadersFilter.class
 com\pedefacil\automation\payment\PaymentsExceptionHandler.class
