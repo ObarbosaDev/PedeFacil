@@ -55,3 +55,41 @@ export async function logClientError(params: {
     // deliberately silent to avoid cascaded failures
   }
 }
+
+let globalErrorHandlersAttached = false;
+
+export function initClientErrorMonitoring() {
+  if (globalErrorHandlersAttached) return;
+  globalErrorHandlersAttached = true;
+
+  window.addEventListener("error", (event) => {
+    void logClientError({
+      scope: "app",
+      message: event.message || "Erro global de janela",
+      stack: (event.error as Error | undefined)?.stack || null,
+      metadata: {
+        source: "window.onerror",
+        file: event.filename || null,
+        line: event.lineno || null,
+        column: event.colno || null,
+      },
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason as { message?: string; stack?: string } | string | null;
+    const message =
+      typeof reason === "string"
+        ? reason
+        : reason?.message || "Promise rejeitada sem tratamento";
+    const stack = typeof reason === "string" ? null : reason?.stack || null;
+    void logClientError({
+      scope: "app",
+      message,
+      stack,
+      metadata: {
+        source: "window.unhandledrejection",
+      },
+    });
+  });
+}

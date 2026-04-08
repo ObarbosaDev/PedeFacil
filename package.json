@@ -12,6 +12,8 @@
     "check:repo": "node scripts/repo-safety-check.mjs",
     "check:security": "npm run check:repo",
     "check:launch-3d": "node scripts/launch-3d-check.mjs",
+    "backup:critical": "node scripts/backup-critical-data.mjs",
+    "restore:critical": "node scripts/restore-critical-data.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

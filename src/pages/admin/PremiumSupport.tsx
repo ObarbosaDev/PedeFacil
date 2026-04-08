@@ -6,29 +6,55 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { buildWhatsAppSupportLink, SUPPORT_PHONE_DISPLAY } from "@/lib/support";
-import { MessageCircle, Phone, ShieldCheck, Star } from "lucide-react";
+import { AlertTriangle, MessageCircle, Phone, ShieldCheck, Star } from "lucide-react";
 import { toast } from "sonner";
+
+type IncidentKey = "payment_not_updated" | "order_stuck" | "delivery_late";
+
+const INCIDENT_TEMPLATES: Record<IncidentKey, { title: string; message: string }> = {
+  payment_not_updated: {
+    title: "Pagou e nao caiu",
+    message:
+      "Preciso de suporte urgente: pagamento aprovado, mas status nao atualizou no sistema. Ja tentei revalidar e continua pendente.",
+  },
+  order_stuck: {
+    title: "Pedido travado",
+    message:
+      "Preciso de ajuda: pedido travou no fluxo e nao avancou no painel. Pode verificar o status desse pedido?",
+  },
+  delivery_late: {
+    title: "Entrega atrasada",
+    message:
+      "Preciso de apoio: entrega esta atrasada e cliente aguardando retorno. Quero orientacao para resolver agora.",
+  },
+};
 
 export default function PremiumSupport() {
   const [storeName, setStoreName] = useState("");
-  const [subject, setSubject] = useState("Acompanhamento consultivo");
+  const [subject, setSubject] = useState("Ajuste de operacao");
   const [details, setDetails] = useState("");
   const [bestTime, setBestTime] = useState("");
 
   const priorityMessage = useMemo(() => {
     const name = storeName.trim() || "Minha loja";
-    return `Olá! Sou lojista da ${name} e preciso de suporte prioritário no Pede Fácil.`;
+    return `Ola! Sou lojista da ${name} e preciso de suporte prioritario no Pede Facil.`;
   }, [storeName]);
 
   const consultiveMessage = useMemo(() => {
     const name = storeName.trim() || "Minha loja";
-    const when = bestTime.trim() || "Sem horário definido";
+    const when = bestTime.trim() || "Sem horario definido";
     const context = details.trim() || "Sem detalhes adicionais";
-    return `Olá! Sou lojista da ${name} e quero acompanhamento consultivo.\n\nTema: ${subject}\nMelhor horário: ${when}\nDetalhes: ${context}`;
+    return `Ola! Sou lojista da ${name} e quero acompanhamento consultivo.\n\nTema: ${subject}\nMelhor horario: ${when}\nDetalhes: ${context}`;
   }, [bestTime, details, storeName, subject]);
 
   const openSupport = (message: string) => {
     window.open(buildWhatsAppSupportLink(message), "_blank", "noopener,noreferrer");
+  };
+
+  const openIncident = (key: IncidentKey) => {
+    const baseName = storeName.trim() || "Minha loja";
+    const text = `Incidente: ${INCIDENT_TEMPLATES[key].title}\nLoja: ${baseName}\n\n${INCIDENT_TEMPLATES[key].message}`;
+    openSupport(text);
   };
 
   const copyPhone = async () => {
@@ -36,7 +62,7 @@ export default function PremiumSupport() {
       await navigator.clipboard.writeText(SUPPORT_PHONE_DISPLAY);
       toast.success("Contato de suporte copiado.");
     } catch {
-      toast.error("Não rolou copiar agora.");
+      toast.error("Nao rolou copiar agora.");
     }
   };
 
@@ -47,9 +73,9 @@ export default function PremiumSupport() {
           <Star className="h-3.5 w-3.5 mr-1" />
           Premium
         </Badge>
-        <h1 className="text-3xl font-black">Suporte prioritário</h1>
+        <h1 className="text-3xl font-black">Suporte prioritario</h1>
         <p className="text-muted-foreground">
-          Canal direto para suporte da sua operação e acompanhamento consultivo no WhatsApp.
+          Canal direto no WhatsApp para suporte operacional e acompanhamento da sua loja.
         </p>
       </div>
 
@@ -58,10 +84,10 @@ export default function PremiumSupport() {
           <CardHeader>
             <CardTitle className="inline-flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary" />
-              Atendimento prioritário
+              Atendimento prioritario
             </CardTitle>
             <CardDescription>
-              Abra uma conversa com o suporte Premium e já entre com contexto da sua loja.
+              Abra a conversa com contexto da sua loja e acelere o atendimento.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -71,7 +97,7 @@ export default function PremiumSupport() {
                 id="storeNamePriority"
                 value={storeName}
                 onChange={(event) => setStoreName(event.target.value)}
-                placeholder="Ex.: Açaí da Vila"
+                placeholder="Ex.: Acai da Vila"
               />
             </div>
 
@@ -100,7 +126,7 @@ export default function PremiumSupport() {
               Acompanhamento consultivo
             </CardTitle>
             <CardDescription>
-              Envie um briefing rápido e abra o atendimento consultivo com mensagem estruturada.
+              Envie um briefing rapido e abra consultoria de melhoria da operacao.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -110,17 +136,17 @@ export default function PremiumSupport() {
                 id="subject"
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
-                placeholder="Ex.: Conversão no checkout"
+                placeholder="Ex.: Conversao no checkout"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bestTime">Melhor horário para contato</Label>
+              <Label htmlFor="bestTime">Melhor horario para contato</Label>
               <Input
                 id="bestTime"
                 value={bestTime}
                 onChange={(event) => setBestTime(event.target.value)}
-                placeholder="Ex.: Segunda a sexta, 14h às 18h"
+                placeholder="Ex.: Segunda a sexta, 14h as 18h"
               />
             </div>
 
@@ -130,18 +156,41 @@ export default function PremiumSupport() {
                 id="details"
                 value={details}
                 onChange={(event) => setDetails(event.target.value)}
-                placeholder="Explique o que você quer melhorar e onde está travando."
+                placeholder="Me diga rapido o que voce quer melhorar."
                 className="min-h-[110px]"
               />
             </div>
 
             <Button onClick={() => openSupport(consultiveMessage)} className="w-full">
               <MessageCircle className="h-4 w-4 mr-2" />
-              Iniciar acompanhamento consultivo
+              Iniciar acompanhamento
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="inline-flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-orange-600" />
+            Playbook de incidentes
+          </CardTitle>
+          <CardDescription>
+            Se der problema na operacao, use um botao abaixo e ja manda o chamado com texto pronto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(Object.keys(INCIDENT_TEMPLATES) as IncidentKey[]).map((key) => (
+            <div key={key} className="rounded-xl border bg-muted/20 p-3 space-y-3">
+              <p className="font-semibold">{INCIDENT_TEMPLATES[key].title}</p>
+              <Button onClick={() => openIncident(key)} className="w-full" variant="outline">
+                Abrir chamado
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }
+

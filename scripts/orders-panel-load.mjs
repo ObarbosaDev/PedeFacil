@@ -49,20 +49,46 @@ const totalRequests = Number(getArg("--requests", "3000"));
 const concurrency = Number(getArg("--concurrency", "120"));
 const pageSize = Number(getArg("--page-size", "50"));
 
-if (!establishmentId) {
-  console.error("Use --establishment <uuid_da_loja>.");
-  process.exit(1);
+async function resolveEstablishmentId() {
+  if (establishmentId) {
+    if (looksLikePlaceholder(establishmentId) || !isUuid(establishmentId)) {
+      console.error("Establishment invalido. Use um UUID real da loja em --establishment.");
+      process.exit(1);
+    }
+    return establishmentId;
+  }
+
+  const lookupUrl = `${baseUrl}/rest/v1/establishments?select=id&order=created_at.desc&limit=1`;
+  const lookupResponse = await fetch(lookupUrl, {
+    method: "GET",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+  });
+
+  if (!lookupResponse.ok) {
+    const text = await lookupResponse.text();
+    console.error(`Nao foi possivel descobrir uma loja automaticamente. ${lookupResponse.status}: ${text.slice(0, 180)}`);
+    process.exit(1);
+  }
+
+  const rows = await lookupResponse.json();
+  if (!Array.isArray(rows) || rows.length === 0 || !rows[0]?.id || !isUuid(rows[0].id)) {
+    console.error("Nao existe loja valida para rodar o teste. Crie uma loja e rode novamente.");
+    process.exit(1);
+  }
+
+  console.log(`Usando establishment automatico: ${rows[0].id}`);
+  return rows[0].id;
 }
 
-if (looksLikePlaceholder(establishmentId) || !isUuid(establishmentId)) {
-  console.error("Establishment invalido. Use um UUID real da loja em --establishment.");
-  process.exit(1);
-}
+const resolvedEstablishmentId = await resolveEstablishmentId();
 
 const endpoint =
   `${baseUrl}/rest/v1/orders` +
   `?select=id,created_at,status,payment_status,total,customer_name,order_type` +
-  `&establishment_id=eq.${encodeURIComponent(establishmentId)}` +
+  `&establishment_id=eq.${encodeURIComponent(resolvedEstablishmentId)}` +
   `&order=created_at.desc` +
   `&limit=${Number.isFinite(pageSize) ? Math.max(1, pageSize) : 50}`;
 

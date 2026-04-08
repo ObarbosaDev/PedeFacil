@@ -10,6 +10,16 @@ const forbiddenPatterns = [
   /^.*service[-_]?account.*\.json$/i,
 ];
 
+const forbiddenContentPatterns = [
+  { regex: /sb_secret_[a-zA-Z0-9_-]{20,}/, label: "Supabase service role key" },
+  { regex: /APP_USR-[a-zA-Z0-9-]{20,}/, label: "Mercado Pago access token" },
+  {
+    regex:
+      /MERCADOPAGO_WEBHOOK_TOKEN\s*=\s*(?!xxx|token_webhook|SEU_|SUA_|example|EXAMPLE)[a-zA-Z0-9_-]{24,}(?:\r?\n|$)/,
+    label: "Mercado Pago webhook token",
+  },
+];
+
 const allowList = new Set([".env", ".env.example"]);
 
 const ignoreDirs = new Set([
@@ -98,6 +108,57 @@ if (violations.length) {
     console.error(` - ${file}`);
   }
   console.error("\nRemova os arquivos sensiveis e mantenha somente templates (ex.: .env.example).");
+  process.exit(1);
+}
+
+const textExtensions = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".yml",
+  ".yaml",
+  ".env",
+  ".example",
+  ".md",
+  ".sql",
+  ".java",
+  ".properties",
+  ".xml",
+  ".txt",
+]);
+
+const contentViolations = [];
+for (const file of files) {
+  const normalized = file.replace(/\\/g, "/");
+  if (allowList.has(normalized)) continue;
+  if (deletedInIndex.has(normalized)) continue;
+  if (normalized.startsWith("dist/") || normalized.startsWith("backend/target/")) continue;
+
+  const ext = path.extname(normalized).toLowerCase();
+  const isTextLikely = textExtensions.has(ext) || normalized.endsWith(".env.example");
+  if (!isTextLikely) continue;
+
+  const abs = path.join(repoRoot, normalized);
+  if (!fs.existsSync(abs)) continue;
+  const content = fs.readFileSync(abs, "utf8");
+
+  for (const pattern of forbiddenContentPatterns) {
+    if (pattern.regex.test(content)) {
+      contentViolations.push({ file: normalized, label: pattern.label });
+      break;
+    }
+  }
+}
+
+if (contentViolations.length) {
+  console.error("Falha de seguranca: segredo detectado no conteudo de arquivos versionados:");
+  for (const item of contentViolations) {
+    console.error(` - ${item.file} (${item.label})`);
+  }
+  console.error("\nRemova ou rotacione o segredo e use somente placeholders nos arquivos do repositorio.");
   process.exit(1);
 }
 

@@ -179,8 +179,15 @@ public class PlanPaymentsController {
 
   @PostMapping("/mercadopago/webhook")
   public ResponseEntity<Map<String, Object>> mercadoPagoWebhook(
+      HttpServletRequest httpRequest,
       @RequestParam Map<String, String> queryParams,
       @RequestBody(required = false) String rawBody) {
+
+    enforceRateLimit(
+        "webhook",
+        resolveClientKey(httpRequest),
+        safePositive(properties.getWebhookRateLimitMax(), 300),
+        safePositive(properties.getWebhookRateLimitWindowSeconds(), 60));
 
     validateWebhookToken(queryParams.get("token"));
     String paymentId = extractPaymentId(queryParams, rawBody);

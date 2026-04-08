@@ -1,10 +1,12 @@
 package com.pedefacil.automation.payment;
 
 import java.io.IOException;
+import java.util.UUID;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -22,6 +24,12 @@ public class PaymentsSecurityHeadersFilter extends OncePerRequestFilter {
 
     String path = request.getRequestURI();
     if (path != null && path.startsWith("/api/payments")) {
+      String requestId = request.getHeader("X-Request-Id");
+      if (requestId == null || requestId.isBlank()) {
+        requestId = UUID.randomUUID().toString();
+      }
+      MDC.put("requestId", requestId);
+      response.setHeader("X-Request-Id", requestId);
       response.setHeader("X-Content-Type-Options", "nosniff");
       response.setHeader("X-Frame-Options", "DENY");
       response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -29,6 +37,10 @@ public class PaymentsSecurityHeadersFilter extends OncePerRequestFilter {
       response.setHeader("Cache-Control", "no-store, max-age=0");
     }
 
-    filterChain.doFilter(request, response);
+    try {
+      filterChain.doFilter(request, response);
+    } finally {
+      MDC.remove("requestId");
+    }
   }
 }
