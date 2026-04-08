@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pedefacil-backend
+    runtime: docker
+    rootDir: backend
+    healthCheckPath: /api/payments/health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8081"
+      - key: PAYMENTS_STRICT_STARTUP_VALIDATION
+        value: "true"
