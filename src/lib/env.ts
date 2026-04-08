@@ -5,6 +5,10 @@ const envSchema = z.object({
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().min(20, "VITE_SUPABASE_PUBLISHABLE_KEY invalida"),
   VITE_SUPABASE_PROJECT_ID: z.string().min(3, "VITE_SUPABASE_PROJECT_ID invalido").optional(),
   VITE_PAYMENTS_API_BASE_URL: z.string().url("VITE_PAYMENTS_API_BASE_URL invalida"),
+  VITE_ENABLE_INTERNAL_ADMIN_PAGES: z.string().optional(),
+  VITE_FEATURE_AUTOMATIONS: z.string().optional(),
+  VITE_FEATURE_MARKETPLACE_OPS: z.string().optional(),
+  VITE_FEATURE_PREMIUM_SUPPORT: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);

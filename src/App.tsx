@@ -11,6 +11,7 @@ import NetworkStatusBanner from "@/components/system/NetworkStatusBanner";
 import PageLoader from "@/components/system/PageLoader";
 import RouteA11yAnnouncer from "@/components/system/RouteA11yAnnouncer";
 import { getUserRole } from "@/lib/auth-role";
+import { featureFlags } from "@/lib/feature-flags";
 
 const Index = lazy(() => import("./pages/Index"));
 const Plans = lazy(() => import("./pages/Plans"));
@@ -49,6 +50,9 @@ const ClientAccount = lazy(() => import("./pages/client/ClientAccount"));
 const DriverLogin = lazy(() => import("./pages/driver/DriverLogin"));
 const DriverRegister = lazy(() => import("./pages/driver/DriverRegister"));
 const DriverPanel = lazy(() => import("./pages/driver/DriverPanel"));
+
+const ENABLE_INTERNAL_ADMIN_PAGES =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_INTERNAL_ADMIN_PAGES === "true";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -288,16 +292,25 @@ function AppRoutes() {
           <Route path="loja" element={<StoreSettings />} />
           <Route path="fidelidade" element={<Loyalty />} />
           <Route path="cupons" element={<Coupons />} />
-          <Route path="automacoes" element={<Automations />} />
+          <Route
+            path="automacoes"
+            element={featureFlags.automations ? <Automations /> : <Navigate to="/admin" replace />}
+          />
           <Route path="entregadores" element={<Drivers />} />
           <Route path="entregadores/ranking" element={<DriverRanking />} />
           <Route path="incidentes" element={<Incidents />} />
           <Route path="pagamentos/ledger" element={<PaymentsLedger />} />
-          <Route path="operacao-marketplace" element={<MarketplaceControl />} />
-          <Route path="go-live" element={<GoLive />} />
-          <Route path="go-live/apresentacao" element={<GoLivePresentation />} />
-          <Route path="roadmap" element={<RoadmapChecklist />} />
-          <Route path="suporte" element={<PremiumSupport />} />
+          <Route
+            path="operacao-marketplace"
+            element={featureFlags.marketplaceOps ? <MarketplaceControl /> : <Navigate to="/admin" replace />}
+          />
+          <Route path="go-live" element={ENABLE_INTERNAL_ADMIN_PAGES ? <GoLive /> : <Navigate to="/admin" replace />} />
+          <Route path="go-live/apresentacao" element={ENABLE_INTERNAL_ADMIN_PAGES ? <GoLivePresentation /> : <Navigate to="/admin" replace />} />
+          <Route path="roadmap" element={ENABLE_INTERNAL_ADMIN_PAGES ? <RoadmapChecklist /> : <Navigate to="/admin" replace />} />
+          <Route
+            path="suporte"
+            element={featureFlags.premiumSupport ? <PremiumSupport /> : <Navigate to="/admin" replace />}
+          />
         </Route>
 
         <Route path="*" element={<NotFound />} />

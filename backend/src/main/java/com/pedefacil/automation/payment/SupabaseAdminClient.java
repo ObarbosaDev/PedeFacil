@@ -197,6 +197,80 @@ public class SupabaseAdminClient {
     sendJson(request, "Supabase upsert payments_ledger");
   }
 
+  public int rolloverExpiredTrialsToPendingPayment(int limit) {
+    String baseUrl = supabaseBaseUrl();
+    String uri = baseUrl + "/rest/v1/rpc/rollover_expired_trials_to_pending_payment";
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("p_limit", limit);
+
+    HttpRequest request = baseRequest(URI.create(uri))
+        .POST(HttpRequest.BodyPublishers.ofString(writeJson(body)))
+        .build();
+
+    JsonNode response = sendJson(request, "Supabase rollover_expired_trials_to_pending_payment");
+    if (!response.isArray() || response.size() == 0) return 0;
+    return response.get(0).path("processed_count").asInt(0);
+  }
+
+  public int expireOverdueActiveSubscriptions(int limit) {
+    String baseUrl = supabaseBaseUrl();
+    String uri = baseUrl + "/rest/v1/rpc/expire_overdue_active_subscriptions";
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("p_limit", limit);
+
+    HttpRequest request = baseRequest(URI.create(uri))
+        .POST(HttpRequest.BodyPublishers.ofString(writeJson(body)))
+        .build();
+
+    JsonNode response = sendJson(request, "Supabase expire_overdue_active_subscriptions");
+    if (!response.isArray() || response.size() == 0) return 0;
+    return response.get(0).path("processed_count").asInt(0);
+  }
+
+  public int expireStalePendingSubscriptions(int limit, int maxPendingMinutes) {
+    String baseUrl = supabaseBaseUrl();
+    String uri = baseUrl + "/rest/v1/rpc/expire_stale_pending_subscriptions";
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("p_limit", limit);
+    body.put("p_max_pending_minutes", maxPendingMinutes);
+
+    HttpRequest request = baseRequest(URI.create(uri))
+        .POST(HttpRequest.BodyPublishers.ofString(writeJson(body)))
+        .build();
+
+    JsonNode response = sendJson(request, "Supabase expire_stale_pending_subscriptions");
+    if (!response.isArray() || response.size() == 0) return 0;
+    return response.get(0).path("processed_count").asInt(0);
+  }
+
+  public OpsReconciliationSnapshot getOpsSubscriptionReconciliationSnapshot(int lookbackHours) {
+    String baseUrl = supabaseBaseUrl();
+    String uri = baseUrl + "/rest/v1/rpc/ops_subscription_reconciliation_snapshot";
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("p_lookback_hours", lookbackHours);
+
+    HttpRequest request = baseRequest(URI.create(uri))
+        .POST(HttpRequest.BodyPublishers.ofString(writeJson(body)))
+        .build();
+
+    JsonNode response = sendJson(request, "Supabase ops_subscription_reconciliation_snapshot");
+    if (!response.isArray() || response.size() == 0) {
+      return new OpsReconciliationSnapshot(0, 0, 0, 0, 0);
+    }
+
+    JsonNode row = response.get(0);
+    return new OpsReconciliationSnapshot(
+        row.path("pending_over_2h").asInt(0),
+        row.path("active_expired_count").asInt(0),
+        row.path("trial_expired_still_active").asInt(0),
+        row.path("approved_payments_lookback").asInt(0),
+        row.path("failed_payments_lookback").asInt(0));
+  }
+
   private HttpRequest.Builder baseRequest(URI uri) {
     String serviceRole = required(properties.getSupabaseServiceRoleKey(), "SUPABASE_SERVICE_ROLE_KEY");
     return HttpRequest.newBuilder(uri)
@@ -413,6 +487,47 @@ public class SupabaseAdminClient {
 
     public String getMercadoPagoUserId() {
       return mercadoPagoUserId;
+    }
+  }
+
+  public static class OpsReconciliationSnapshot {
+    private final int pendingOver2h;
+    private final int activeExpiredCount;
+    private final int trialExpiredStillActive;
+    private final int approvedPaymentsLookback;
+    private final int failedPaymentsLookback;
+
+    public OpsReconciliationSnapshot(
+        int pendingOver2h,
+        int activeExpiredCount,
+        int trialExpiredStillActive,
+        int approvedPaymentsLookback,
+        int failedPaymentsLookback) {
+      this.pendingOver2h = pendingOver2h;
+      this.activeExpiredCount = activeExpiredCount;
+      this.trialExpiredStillActive = trialExpiredStillActive;
+      this.approvedPaymentsLookback = approvedPaymentsLookback;
+      this.failedPaymentsLookback = failedPaymentsLookback;
+    }
+
+    public int getPendingOver2h() {
+      return pendingOver2h;
+    }
+
+    public int getActiveExpiredCount() {
+      return activeExpiredCount;
+    }
+
+    public int getTrialExpiredStillActive() {
+      return trialExpiredStillActive;
+    }
+
+    public int getApprovedPaymentsLookback() {
+      return approvedPaymentsLookback;
+    }
+
+    public int getFailedPaymentsLookback() {
+      return failedPaymentsLookback;
     }
   }
 }

@@ -25,8 +25,22 @@ payments:
   checkout-rate-limit-window-seconds: ${PAYMENTS_CHECKOUT_RATE_LIMIT_WINDOW_SECONDS:60}
   revalidate-rate-limit-max: ${PAYMENTS_REVALIDATE_RATE_LIMIT_MAX:30}
   revalidate-rate-limit-window-seconds: ${PAYMENTS_REVALIDATE_RATE_LIMIT_WINDOW_SECONDS:60}
+  webhook-rate-limit-max: ${PAYMENTS_WEBHOOK_RATE_LIMIT_MAX:300}
+  webhook-rate-limit-window-seconds: ${PAYMENTS_WEBHOOK_RATE_LIMIT_WINDOW_SECONDS:60}
   mercadopago-retry-max-attempts: ${MERCADOPAGO_RETRY_MAX_ATTEMPTS:3}
   mercadopago-retry-base-delay-ms: ${MERCADOPAGO_RETRY_BASE_DELAY_MS:250}
+  trial-rollover-enabled: ${TRIAL_ROLLOVER_ENABLED:true}
+  trial-rollover-cron: ${TRIAL_ROLLOVER_CRON:0 */10 * * * *}
+  trial-rollover-batch-size: ${TRIAL_ROLLOVER_BATCH_SIZE:200}
+  subscription-lifecycle-batch-size: ${SUBSCRIPTION_LIFECYCLE_BATCH_SIZE:200}
+  stale-pending-max-minutes: ${STALE_PENDING_MAX_MINUTES:120}
+  strict-startup-validation: ${PAYMENTS_STRICT_STARTUP_VALIDATION:true}
+  ops-monitoring-enabled: ${PAYMENTS_OPS_MONITORING_ENABLED:true}
+  ops-monitoring-cron: ${PAYMENTS_OPS_MONITORING_CRON:0 * * * * *}
+  ops-reconciliation-cron: ${PAYMENTS_OPS_RECONCILIATION_CRON:0 0 6 * * *}
+  ops-reconciliation-lookback-hours: ${PAYMENTS_OPS_RECONCILIATION_LOOKBACK_HOURS:24}
+  ops-alert-webhook-url: ${PAYMENTS_OPS_ALERT_WEBHOOK_URL:}
+  ops-alert-cooldown-minutes: ${PAYMENTS_OPS_ALERT_COOLDOWN_MINUTES:15}
   mercadopago-access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
   mercadopago-api-base-url: ${MERCADOPAGO_API_BASE_URL:https://api.mercadopago.com}
   mercadopago-webhook-token: ${MERCADOPAGO_WEBHOOK_TOKEN:}

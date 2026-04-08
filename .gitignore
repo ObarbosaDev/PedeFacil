@@ -49,3 +49,4 @@ secrets.*
 supabase/.temp/
 *.dump
 *.bak
+backups/

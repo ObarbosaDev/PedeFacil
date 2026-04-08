@@ -210,8 +210,18 @@ Antes de homologar ou publicar, aplique todas as migrations do projeto no Supaba
 - `20260402132000_start_plan_checkout_rpc_repair.sql`
 - `20260402143000_scale_hardening.sql`
 - `20260406230000_store_trial_30_days.sql`
+- `20260407001000_trial_auto_rollover_pending.sql`
+- `20260407003000_subscription_lifecycle_automation.sql`
 
 Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
+
+### Trial de 30 dias (com cobrança automática pós-teste)
+
+- Durante o período de teste, a assinatura fica ativa.
+- Ao vencer o trial, um job no backend move a assinatura para `pending_payment` e gera nova sessão de checkout automaticamente.
+- O acesso ao painel fica bloqueado até o pagamento ser confirmado.
+- Assinaturas ativas com período vencido viram `expired` automaticamente.
+- Assinaturas `pending_payment` antigas também expiram automaticamente para evitar pendências fantasmas.
 
 ### Como aplicar migrations (Supabase CLI)
 

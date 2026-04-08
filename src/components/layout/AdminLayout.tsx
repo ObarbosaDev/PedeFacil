@@ -27,6 +27,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { canAccessStorePanel, getMyStoreSubscription } from "@/lib/subscription";
+import { featureFlags } from "@/lib/feature-flags";
 import {
   PlanFeature,
   PlanSlug,
@@ -36,7 +37,7 @@ import {
   planLabel,
 } from "@/lib/plan-access";
 
-const navItems: { label: string; icon: any; path: string; feature: PlanFeature }[] = [
+const navItems: { label: string; icon: any; path: string; feature: PlanFeature; enabled?: boolean }[] = [
   { label: "Resumo", icon: LayoutDashboard, path: "/admin", feature: "dashboard" },
   { label: "Pedidos", icon: ClipboardList, path: "/admin/pedidos", feature: "orders" },
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos", feature: "products" },
@@ -45,10 +46,10 @@ const navItems: { label: string; icon: any; path: string; feature: PlanFeature }
   { label: "Entregadores", icon: Bike, path: "/admin/entregadores", feature: "drivers" },
   { label: "Ranking motoboy", icon: Medal, path: "/admin/entregadores/ranking", feature: "drivers" },
   { label: "Incidentes", icon: Siren, path: "/admin/incidentes", feature: "dashboard" },
-  { label: "Operação marketplace", icon: Rocket, path: "/admin/operacao-marketplace", feature: "dashboard" },
+  { label: "Operação marketplace", icon: Rocket, path: "/admin/operacao-marketplace", feature: "dashboard", enabled: featureFlags.marketplaceOps },
   { label: "Ledger pagamentos", icon: ReceiptText, path: "/admin/pagamentos/ledger", feature: "dashboard" },
-  { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes", feature: "automations" },
-  { label: "Suporte Premium", icon: Headset, path: "/admin/suporte", feature: "support" },
+  { label: "Automação WhatsApp", icon: Bot, path: "/admin/automacoes", feature: "automations", enabled: featureFlags.automations },
+  { label: "Suporte Premium", icon: Headset, path: "/admin/suporte", feature: "support", enabled: featureFlags.premiumSupport },
   { label: "Minha Loja", icon: Store, path: "/admin/loja", feature: "store" },
   { label: "Clientes VIP", icon: Star, path: "/admin/fidelidade", feature: "loyalty" },
 ];
@@ -207,7 +208,7 @@ export default function AdminLayout() {
       {mobileOpen && (
         <div id="admin-mobile-menu" className="md:hidden fixed inset-0 z-40 bg-background pt-16">
           <nav className="p-4 space-y-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => item.enabled !== false).map((item) => {
               const isLocked = !hasPlanFeature(activePlan, item.feature);
               const isActive = !isLocked && location.pathname === item.path;
               const upgradeHref = `/planos/checkout?plano=${getRequiredPlanForFeature(item.feature)}&billing=monthly`;
