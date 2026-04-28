@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import AutosaveStatus from "@/components/system/AutosaveStatus";
 import { slugify } from "@/lib/formatters";
 import { toast } from "sonner";
 import { ExternalLink, Plus, Shield, Trash2 } from "lucide-react";
@@ -22,6 +23,7 @@ import {
   updateSecuritySettings,
 } from "@/lib/account-security";
 import { hasRecentStepUp, markStepUpVerified } from "@/lib/step-up";
+import { useDebouncedEffect } from "@/hooks/useDebouncedEffect";
 
 export default function StoreSettings() {
   const { user, confirmPassword, signOutAllSessions } = useAuth();
@@ -30,6 +32,8 @@ export default function StoreSettings() {
   const [stepUpOpen, setStepUpOpen] = useState(false);
   const [stepUpPassword, setStepUpPassword] = useState("");
   const [stepUpLoading, setStepUpLoading] = useState(false);
+  const [autosaveDirty, setAutosaveDirty] = useState(false);
+  const [autosaveSavedAt, setAutosaveSavedAt] = useState<string | null>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const { data: establishment, isLoading } = useQuery({
@@ -204,6 +208,8 @@ export default function StoreSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-establishment"] });
+      setAutosaveDirty(false);
+      setAutosaveSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       toast.success("Loja salva com sucesso.");
     },
     onError: (err: any) => toast.error(err.message),
@@ -383,14 +389,28 @@ export default function StoreSettings() {
 
   if (isLoading) return <p className="text-center py-12 text-muted-foreground">Carregando, só um instante...</p>;
 
+  useDebouncedEffect(
+    () => {
+      if (!initialized || !establishment || !autosaveDirty) return;
+      if (!form.name.trim() || !form.whatsapp.trim()) return;
+      if (saveMutation.isPending) return;
+      saveMutation.mutate();
+    },
+    1200,
+    [autosaveDirty, initialized, establishment?.id, form]
+  );
+
   const slug = slugify(form.name || "minha-loja");
   const publicUrl = `${window.location.origin}/loja/${slug}`;
 
   return (
     <div className="space-y-6 animate-fade-in max-w-2xl">
-      <div>
-        <h1 className="text-3xl font-bold">Minha Loja</h1>
-        <p className="text-muted-foreground">Aqui você ajusta tudo o que o cliente vai ver no cardápio.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">Minha Loja</h1>
+          <p className="text-muted-foreground">Aqui você ajusta tudo o que o cliente vai ver no cardápio.</p>
+        </div>
+        <AutosaveStatus dirty={autosaveDirty} saving={saveMutation.isPending} savedAt={autosaveSavedAt} />
       </div>
 
       {establishment && (
@@ -414,28 +434,28 @@ export default function StoreSettings() {
         <CardContent className="space-y-4">
           <div>
             <Label>Nome da loja *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Hamburgueria do João" />
+            <Input value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setAutosaveDirty(true); }} placeholder="Hamburgueria do João" />
           </div>
           <div>
             <Label>Descrição</Label>
-            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Os melhores hambúrgueres artesanais..." />
+            <Textarea value={form.description} onChange={(e) => { setForm({ ...form, description: e.target.value }); setAutosaveDirty(true); }} placeholder="Os melhores hambúrgueres artesanais..." />
           </div>
           <div>
             <Label>WhatsApp *</Label>
-            <Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="5511999998888" />
+            <Input value={form.whatsapp} onChange={(e) => { setForm({ ...form, whatsapp: e.target.value }); setAutosaveDirty(true); }} placeholder="5511999998888" />
             <p className="text-xs text-muted-foreground mt-1">Use código do país + DDD + número. Exemplo: 5511999998888.</p>
           </div>
           <div>
             <Label>Endereço</Label>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Rua das Flores, 123" />
+            <Input value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setAutosaveDirty(true); }} placeholder="Rua das Flores, 123" />
           </div>
           <div>
             <Label>Horário de funcionamento</Label>
-            <Input value={form.opening_hours} onChange={(e) => setForm({ ...form, opening_hours: e.target.value })} placeholder="Seg-Sex: 11h-23h | Sáb-Dom: 11h-00h" />
+            <Input value={form.opening_hours} onChange={(e) => { setForm({ ...form, opening_hours: e.target.value }); setAutosaveDirty(true); }} placeholder="Seg-Sex: 11h-23h | Sáb-Dom: 11h-00h" />
           </div>
           <div>
             <Label>URL do logo</Label>
-            <Input value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} placeholder="https://..." />
+            <Input value={form.logo_url} onChange={(e) => { setForm({ ...form, logo_url: e.target.value }); setAutosaveDirty(true); }} placeholder="https://..." />
           </div>
           <div>
             <Label>Upload do logo</Label>

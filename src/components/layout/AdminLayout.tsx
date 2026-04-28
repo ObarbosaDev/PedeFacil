@@ -22,6 +22,7 @@ import {
   ReceiptText,
   Headset,
   Rocket,
+  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ import {
   planLabel,
 } from "@/lib/plan-access";
 
-const navItems: { label: string; icon: any; path: string; feature: PlanFeature; enabled?: boolean }[] = [
+const navItems: { label: string; icon: LucideIcon; path: string; feature: PlanFeature; enabled?: boolean }[] = [
   { label: "Resumo", icon: LayoutDashboard, path: "/admin", feature: "dashboard" },
   { label: "Pedidos", icon: ClipboardList, path: "/admin/pedidos", feature: "orders" },
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos", feature: "products" },

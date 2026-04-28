@@ -8,13 +8,8 @@ import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import javax.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +31,6 @@ public class PlanPaymentsController {
   private final SupabaseAdminClient supabaseAdminClient;
   private final MercadoPagoClient mercadoPagoClient;
   private final ObjectMapper objectMapper;
-  private final ConcurrentHashMap<String, Deque<Long>> requestWindows = new ConcurrentHashMap<>();
 
   public PlanPaymentsController(
       PaymentsProperties properties,
@@ -434,7 +428,8 @@ public class PlanPaymentsController {
     if (!StringUtils.hasText(token)) {
       return normalized + "/api/payments/mercadopago/webhook";
     }
-    return normalized + "/api/payments/mercadopago/webhook?token=" + token.trim();
+    return normalized + "/api/payments/mercadopago/webhook?token="
+        + URLEncoder.encode(token.trim(), StandardCharsets.UTF_8);
   }
 
   private String buildOrderWebhookUrl(String checkoutSessionId) {
@@ -460,15 +455,15 @@ public class PlanPaymentsController {
     SupabaseAdminClient.EstablishmentPaymentConfigRow config =
         supabaseAdminClient.getEstablishmentPaymentConfigById(orderSession.getEstablishmentId());
     if (config == null) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loja do pedido não encontrada.");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loja do pedido nao encontrada.");
     }
     if (!config.isAcceptsMarketplacePayments()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "Esta loja ainda não liberou pagamento no app.");
+          "Esta loja ainda nao liberou pagamento no app.");
     }
     if (!StringUtils.hasText(config.getMercadoPagoAccessToken())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "A loja ainda não configurou a conta de recebimento Mercado Pago.");
+          "A loja ainda nao configurou a conta de recebimento Mercado Pago.");
     }
     return config.getMercadoPagoAccessToken().trim();
   }
@@ -563,21 +558,14 @@ public class PlanPaymentsController {
   }
 
   private void enforceRateLimit(String action, String subject, int maxHits, int windowSeconds) {
-    long now = Instant.now().toEpochMilli();
-    long windowStart = now - (windowSeconds * 1000L);
-    String key = action + ":" + subject;
-
-    Deque<Long> bucket = requestWindows.computeIfAbsent(key, ignored -> new ConcurrentLinkedDeque<>());
-    synchronized (bucket) {
-      while (!bucket.isEmpty() && bucket.peekFirst() < windowStart) {
-        bucket.pollFirst();
-      }
-      if (bucket.size() >= maxHits) {
-        throw new ResponseStatusException(
-            HttpStatus.TOO_MANY_REQUESTS,
-            "Muitas tentativas em sequência. Aguarde um pouco e tente novamente.");
-      }
-      bucket.addLast(now);
+    SupabaseAdminClient.RateLimitResult result =
+        supabaseAdminClient.enforceRateLimit(action, subject, maxHits, windowSeconds);
+    if (!result.isAllowed()) {
+      throw new ResponseStatusException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "Muitas tentativas em sequencia. Aguarde "
+              + Math.max(result.getRetryAfterSeconds(), 1)
+              + "s para tentar novamente.");
     }
   }
 
@@ -587,7 +575,10 @@ public class PlanPaymentsController {
   }
 
   private String firstNotBlank(String... values) {
-    return Arrays.stream(values).filter(StringUtils::hasText).findFirst().orElse(null);
+    for (String value : values) {
+      if (StringUtils.hasText(value)) return value;
+    }
+    return null;
   }
 
   private String asText(JsonNode node) {

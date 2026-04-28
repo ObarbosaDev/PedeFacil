@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import StateCard from "@/components/system/StateCard";
+import HelpCenterCard from "@/components/system/HelpCenterCard";
 import { formatCurrency, getDeliveryOperationModeLabel, PAYMENT_METHOD_LABELS } from "@/lib/formatters";
 import { trackCheckoutEvent } from "@/lib/analytics";
 import { generateWhatsAppMessage, openWhatsApp } from "@/lib/whatsapp";
@@ -116,6 +118,22 @@ type StoredOrderIdempotencyContext = {
 };
 
 type DeliveryRuleStatus = "ok" | "zip_missing" | "out_of_area" | "min_order";
+type CheckoutUserMetadata = {
+  user_type?: string;
+};
+type CheckoutEstablishmentOps = {
+  accepts_marketplace_payments?: boolean | null;
+  accepts_meal_voucher?: boolean | null;
+  accepting_orders_now?: boolean | null;
+  accepts_scheduled_orders?: boolean | null;
+  closed_message?: string | null;
+  delivery_operation_mode?: string | null;
+  pix_key?: string | null;
+  pix_recipient_name?: string | null;
+  pix_instructions?: string | null;
+  busy_mode_enabled?: boolean | null;
+  busy_pause_until?: string | null;
+};
 
 function calculateDiscount(subtotal: number, coupon: {
   discountType: DiscountType;
@@ -153,7 +171,7 @@ export default function Checkout() {
   const checkoutPath = `/loja/${slug}/checkout`;
   const loginHref = `/cliente/login?next=${encodeURIComponent(checkoutPath)}`;
   const registerHref = `/cliente/registro?next=${encodeURIComponent(checkoutPath)}&from=checkout`;
-  const userType = String((user?.user_metadata as any)?.user_type || "");
+  const userType = String(((user?.user_metadata ?? {}) as CheckoutUserMetadata).user_type || "");
   const isCustomerUser = !!user && (!userType || userType === "customer");
 
   const { data: establishment } = useQuery({
@@ -209,20 +227,21 @@ export default function Checkout() {
   const orderType = form.watch("orderType");
   const fulfillmentMode = form.watch("fulfillmentMode");
   const selectedPaymentMethod = form.watch("paymentMethod");
-  const acceptsMarketplacePayments = Boolean((establishment as any)?.accepts_marketplace_payments);
-  const acceptsMealVoucher = Boolean((establishment as any)?.accepts_meal_voucher);
-  const acceptingOrdersNow = (establishment as any)?.accepting_orders_now !== false;
-  const acceptsScheduledOrders = (establishment as any)?.accepts_scheduled_orders !== false;
+  const establishmentOps = establishment as (typeof establishment & CheckoutEstablishmentOps) | null;
+  const acceptsMarketplacePayments = Boolean(establishmentOps?.accepts_marketplace_payments);
+  const acceptsMealVoucher = Boolean(establishmentOps?.accepts_meal_voucher);
+  const acceptingOrdersNow = establishmentOps?.accepting_orders_now !== false;
+  const acceptsScheduledOrders = establishmentOps?.accepts_scheduled_orders !== false;
   const closedMessage =
-    String((establishment as any)?.closed_message || "").trim() ||
+    String(establishmentOps?.closed_message || "").trim() ||
     "Loja fechada no momento. Se quiser, já deixa agendado para amanhã.";
-  const deliveryOperationMode = String((establishment as any)?.delivery_operation_mode || "own_fleet");
+  const deliveryOperationMode = String(establishmentOps?.delivery_operation_mode || "own_fleet");
   const supportsInAppPaymentMethod = selectedPaymentMethod === "pix" || selectedPaymentMethod === "credit_card" || selectedPaymentMethod === "debit_card";
   const shouldUseInAppPayment = acceptsMarketplacePayments && supportsInAppPaymentMethod;
-  const storePixKey = String((establishment as any)?.pix_key || "").trim();
-  const storePixRecipientName = String((establishment as any)?.pix_recipient_name || "").trim();
+  const storePixKey = String(establishmentOps?.pix_key || "").trim();
+  const storePixRecipientName = String(establishmentOps?.pix_recipient_name || "").trim();
   const storePixInstructions =
-    String((establishment as any)?.pix_instructions || "").trim() ||
+    String(establishmentOps?.pix_instructions || "").trim() ||
     "Depois de pagar, envie o comprovante no WhatsApp da loja para liberação.";
   const canUseManualPixFallback = selectedPaymentMethod === "pix" && !shouldUseInAppPayment && !!storePixKey;
   const availablePaymentMethods = [
@@ -634,34 +653,20 @@ export default function Checkout() {
         { onConflict: "user_id" }
       );
 
-      let customerId: string | null = null;
       const normalizedPhone = data.customerPhone.trim();
       const normalizedName = data.customerName.trim();
-      const { data: existingCustomer, error: existingCustomerErr } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("phone", normalizedPhone)
-        .eq("name", normalizedName)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (existingCustomerErr) throw existingCustomerErr;
-
-      if (existingCustomer?.id) {
-        customerId = existingCustomer.id;
-      } else {
-        const { data: customer, error: custErr } = await supabase
-          .from("customers")
-          .insert({ name: normalizedName, phone: normalizedPhone })
-          .select("id")
-          .single();
-        if (custErr) throw custErr;
-        customerId = customer.id;
-      }
+      const { data: customerIdResult, error: customerIdErr } = await (supabase as any).rpc("upsert_customer_contact", {
+        p_name: normalizedName,
+        p_phone: normalizedPhone,
+        p_email: user.email ?? null,
+      });
+      if (customerIdErr) throw customerIdErr;
+      const customerId = String(customerIdResult || "").trim();
+      if (!customerId) throw new Error("Nao rolou preparar o cadastro do cliente para este pedido.");
 
       const isDelivery = data.orderType === "delivery";
       const isScheduledOrder = data.fulfillmentMode === "scheduled";
-      const establishmentOps = establishment as any;
+      const establishmentOps = establishment as CheckoutEstablishmentOps | null;
       const manuallyClosed = establishmentOps?.accepting_orders_now === false;
       const isStorePausedNow = Boolean(
         establishmentOps?.busy_mode_enabled &&
@@ -988,9 +993,9 @@ export default function Checkout() {
   const deliveryMinimumNotReached = orderType === "delivery" && deliveryRuleStatus === "min_order";
   const storePausedNow = Boolean(
     fulfillmentMode !== "scheduled" &&
-    (establishment as any)?.busy_mode_enabled &&
-    (establishment as any)?.busy_pause_until &&
-    new Date((establishment as any).busy_pause_until).getTime() > Date.now()
+    establishmentOps?.busy_mode_enabled &&
+    establishmentOps?.busy_pause_until &&
+    new Date(establishmentOps.busy_pause_until).getTime() > Date.now()
   );
   const isSubmittingOrder = orderMutation.isPending || orderSubmitLockRef.current;
   const storeClosedNow = !acceptingOrdersNow && fulfillmentMode !== "scheduled";
@@ -1668,6 +1673,11 @@ export default function Checkout() {
     </div>
   );
 }
+
+
+
+
+
 
 
 

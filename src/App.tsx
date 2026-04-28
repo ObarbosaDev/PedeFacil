@@ -13,6 +13,12 @@ import RouteA11yAnnouncer from "@/components/system/RouteA11yAnnouncer";
 import { getUserRole } from "@/lib/auth-role";
 import { featureFlags } from "@/lib/feature-flags";
 
+type IdleWindow = Window &
+  typeof globalThis & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+
 const Index = lazy(() => import("./pages/Index"));
 const Plans = lazy(() => import("./pages/Plans"));
 const PlansCheckout = lazy(() => import("./pages/PlansCheckout"));
@@ -21,6 +27,7 @@ const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
+const AuthCallback = lazy(() => import("./pages/auth/AuthCallback"));
 const AdminLayout = lazy(() => import("./components/layout/AdminLayout"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const Products = lazy(() => import("./pages/admin/Products"));
@@ -180,11 +187,12 @@ function RouteChunkWarmup() {
       void import("./pages/PlansCheckout");
     };
 
-    if ("requestIdleCallback" in window) {
-      const idleId = (window as any).requestIdleCallback(warm, { timeout: 1800 });
+    const idleWindow = window as IdleWindow;
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      const idleId = idleWindow.requestIdleCallback(warm, { timeout: 1800 });
       return () => {
-        if ("cancelIdleCallback" in window) {
-          (window as any).cancelIdleCallback(idleId);
+        if (typeof idleWindow.cancelIdleCallback === "function") {
+          idleWindow.cancelIdleCallback(idleId);
         }
       };
     }
@@ -269,6 +277,7 @@ function AppRoutes() {
         <Route path="/registro" element={<Register />} />
         <Route path="/esqueci-senha" element={<ForgotPassword />} />
         <Route path="/redefinir-senha" element={<ResetPassword />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Public store */}
         <Route path="/cliente" element={<RequireClientAuth><ClientPanel /></RequireClientAuth>} />

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirme seu acesso</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4efe7;font-family:Arial,Helvetica,sans-serif;color:#1f1a17;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+      {{ if .Data.email_preheader }}{{ .Data.email_preheader }}{{ else }}Confirme seu acesso para entrar no Pede Fácil.{{ end }}
+    </div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4efe7;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fffdf8;border:1px solid #e7ded2;border-radius:28px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px 32px 16px;background:linear-gradient(135deg,#fff3d6 0%,#f5e7c8 100%);">
+                <p style="margin:0 0 12px;font-size:12px;line-height:1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a5a16;">
+                  {{ if .Data.product_name }}{{ .Data.product_name }}{{ else }}Pede Fácil{{ end }}
+                </p>
+                <h1 style="margin:0;font-size:30px;line-height:1.15;font-weight:800;color:#1f1a17;">
+                  Bora liberar seu acesso?
+                </h1>
+                <p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:#56473c;">
+                  {{ if .Data.full_name }}{{ .Data.full_name }}, {{ end }}falta só confirmar seu e-mail para entrar na conta e começar a usar a plataforma.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:28px 32px 8px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #eadfce;border-radius:22px;background:#fffaf1;">
+                  <tr>
+                    <td style="padding:20px 22px;">
+                      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#6a594c;">
+                        Perfil liberado para:
+                        <strong style="color:#1f1a17;">{{ if .Data.role_label }}{{ .Data.role_label }}{{ else }}acesso ao sistema{{ end }}</strong>
+                      </p>
+                      <p style="margin:0;font-size:14px;line-height:1.6;color:#6a594c;">
+                        E-mail vinculado:
+                        <strong style="color:#1f1a17;">{{ .Email }}</strong>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px 8px;" align="center">
+                <a
+                  href="{{ .ConfirmationURL }}"
+                  style="display:inline-block;background:#171412;color:#fffdf8;text-decoration:none;font-size:16px;font-weight:700;padding:16px 28px;border-radius:999px;"
+                >
+                  {{ if .Data.confirmation_cta }}{{ .Data.confirmation_cta }}{{ else }}Confirmar e entrar{{ end }}
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:8px 32px 0;">
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#7a685a;text-align:center;">
+                  Se o botão não abrir, copie este link no navegador:
+                </p>
+                <p style="margin:10px 0 0;font-size:12px;line-height:1.7;color:#8a7768;word-break:break-all;text-align:center;">
+                  {{ .ConfirmationURL }}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #eee3d6;">
+                  <tr>
+                    <td style="padding-top:24px;">
+                      <p style="margin:0 0 8px;font-size:15px;line-height:1.6;font-weight:700;color:#1f1a17;">
+                        Não foi você?
+                      </p>
+                      <p style="margin:0;font-size:14px;line-height:1.7;color:#6f5f52;">
+                        Pode ignorar este e-mail. Sua conta não será liberada sem a confirmação.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px 32px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e6dccf;border-radius:20px;background:#f8f4ee;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <p style="margin:0 0 6px;font-size:13px;line-height:1.5;font-weight:700;color:#1f1a17;">
+                        Precisa de ajuda?
+                      </p>
+                      <p style="margin:0;font-size:13px;line-height:1.7;color:#6f5f52;">
+                        Suporte no WhatsApp:
+                        <strong>{{ if .Data.support_phone }}{{ .Data.support_phone }}{{ else }}+55 (61) 9 8462-9093{{ end }}</strong>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

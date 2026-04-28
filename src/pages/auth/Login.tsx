@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,7 +30,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { signIn, signOut, sendEmailOtp, verifyEmailOtp } = useAuth();
+  const { signIn, signOut, sendEmailOtp, verifyEmailOtp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -47,6 +47,10 @@ export default function Login() {
 
   const next = searchParams.get("next");
   const safeNext = next && next.startsWith("/") ? next : "/admin";
+
+  if (!authLoading && user && getUserRole(user) === "store_owner" && !otpStep) {
+    return <Navigate to={safeNext} replace />;
+  }
 
   useEffect(() => {
     if (otpResendCooldown <= 0) return;

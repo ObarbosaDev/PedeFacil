@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { formatPhone } from "@/lib/formatters";
 import StateCard from "@/components/system/StateCard";
@@ -36,6 +46,9 @@ import { toast } from "sonner";
 
 type ClientFilter = "all" | "with_logo" | "with_address" | "with_description" | "favorites";
 type ClientSort = "name" | "recent";
+type ClientUserMetadata = {
+  full_name?: string;
+};
 
 interface Establishment {
   id: string;
@@ -120,6 +133,7 @@ export default function ClientPanel() {
   const [filter, setFilter] = useState<ClientFilter>("all");
   const [sortBy, setSortBy] = useState<ClientSort>("name");
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
 
   const [clientName, setClientName] = useState("");
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>([]);
@@ -196,7 +210,7 @@ export default function ClientPanel() {
   useEffect(() => {
     if (!user) return;
     const profileName = customerProfile?.full_name?.trim();
-    const metadataName = String((user.user_metadata as any)?.full_name || "").trim();
+    const metadataName = String(((user.user_metadata ?? {}) as ClientUserMetadata).full_name || "").trim();
     const resolvedName = profileName || metadataName;
     if (!resolvedName) return;
     setClientName(resolvedName);
@@ -358,8 +372,7 @@ export default function ClientPanel() {
   };
 
   const handleSignOut = async () => {
-    const confirmed = window.confirm("Quer mesmo sair da sua conta agora?");
-    if (!confirmed) return;
+    setSignOutDialogOpen(false);
     await signOut();
   };
 
@@ -470,7 +483,12 @@ export default function ClientPanel() {
                           Minha conta
                         </Button>
                       </Link>
-                      <Button variant="outline" size="sm" className="bg-white/10 border-white/30 text-white hover:bg-white/20" onClick={handleSignOut}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+                        onClick={() => setSignOutDialogOpen(true)}
+                      >
                         Sair
                       </Button>
                     </>
@@ -876,6 +894,20 @@ export default function ClientPanel() {
           <ArrowUp className="h-4 w-4" />
         </Button>
       )}
+      <AlertDialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da conta agora?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você volta para a área pública e precisa entrar de novo para acessar seus atalhos, favoritas e histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar aqui</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSignOut}>Sair da conta</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

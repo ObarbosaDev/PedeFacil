@@ -1,6 +1,7 @@
 ﻿import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { env } from "@/lib/env";
 import {
   getResetBlockSeconds,
   getSignInBlockSeconds,
@@ -51,14 +52,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const normalizeEmail = (email: string) => email.trim().toLowerCase();
+  const buildEmailRedirectTo = (targetPath: string) => {
+    const params = new URLSearchParams({ next: targetPath });
+    const baseUrl = env.VITE_PUBLIC_APP_URL || window.location.origin;
+    return `${baseUrl}/auth/callback?${params.toString()}`;
+  };
+  const buildAuthEmailMetadata = (fullName: string, userType: "store_owner" | "customer" | "delivery_driver", extra?: Record<string, unknown>) => {
+    const roleLabel =
+      userType === "store_owner" ? "lojista" : userType === "customer" ? "cliente" : "entregador";
+
+    return {
+      full_name: fullName,
+      user_type: userType,
+      role_label: roleLabel,
+      app_name: "Pede Fácil",
+      product_name: "Pede Fácil",
+      support_phone: "+55 (61) 9 8462-9093",
+      confirmation_cta: "Confirmar e entrar",
+      email_preheader: "Confirme seu acesso para liberar sua conta no Pede Fácil.",
+      ...extra,
+    };
+  };
 
   const signUp = async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
       email: normalizeEmail(email),
       password,
       options: {
-        data: { full_name: fullName, user_type: "store_owner" },
-        emailRedirectTo: `${window.location.origin}/login`,
+        data: buildAuthEmailMetadata(fullName, "store_owner"),
+        emailRedirectTo: buildEmailRedirectTo("/admin"),
       },
     });
     if (error) throw error;
@@ -69,8 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: normalizeEmail(email),
       password,
       options: {
-        data: { full_name: fullName, user_type: "customer", phone: phone || null },
-        emailRedirectTo: `${window.location.origin}/cliente/login`,
+        data: buildAuthEmailMetadata(fullName, "customer", { phone: phone || null }),
+        emailRedirectTo: buildEmailRedirectTo("/cliente/conta"),
       },
     });
     if (error) throw error;
@@ -81,8 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: normalizeEmail(email),
       password,
       options: {
-        data: { full_name: fullName, user_type: "delivery_driver" },
-        emailRedirectTo: `${window.location.origin}/entregador/login`,
+        data: buildAuthEmailMetadata(fullName, "delivery_driver"),
+        emailRedirectTo: buildEmailRedirectTo("/entregador"),
       },
     });
     if (error) throw error;
@@ -137,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
-      redirectTo: `${window.location.origin}/redefinir-senha`,
+      redirectTo: `${env.VITE_PUBLIC_APP_URL || window.location.origin}/redefinir-senha`,
     });
     if (error) {
       registerResetFailure();

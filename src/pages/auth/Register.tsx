@@ -15,13 +15,13 @@ import { trackProductEvent } from "@/lib/product-analytics";
 
 const registerSchema = z
   .object({
-    fullName: z.string().trim().min(2, "Mínimo 2 caracteres").max(100),
-    email: z.string().trim().email("E-mail inválido"),
+    fullName: z.string().trim().min(2, "Minimo 2 caracteres").max(100),
+    email: z.string().trim().email("E-mail invalido"),
     password: z.string().regex(passwordRegex, PASSWORD_RULE),
     confirmPassword: z.string().min(8, "Confirme sua senha"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas não conferem.",
+    message: "As senhas nao conferem.",
     path: ["confirmPassword"],
   });
 
@@ -51,7 +51,7 @@ export default function Register() {
       const safeNext = next && next.startsWith("/") ? next : "/admin";
       navigate(`/login?next=${encodeURIComponent(safeNext)}`);
     } catch (err: any) {
-      toast.error(err.message || "Não rolou criar sua conta agora.");
+      toast.error(err.message || "Nao rolou criar sua conta agora.");
     } finally {
       setLoading(false);
     }
@@ -61,23 +61,23 @@ export default function Register() {
     <AuthSplitLayout
       leftEyebrow="Cadastro de lojista"
       leftTitle="Coloque sua loja no jogo em poucos minutos."
-      leftDescription="Crie sua conta, suba seu cardápio e comece a operar com um painel pronto para crescer junto."
+      leftDescription="Crie sua conta, suba seu cardapio e comece a operar com um painel pronto para crescer junto."
       leftHighlights={[
-        { icon: Rocket, text: "Setup rápido, sem dor de cabeça." },
-        { icon: BadgeCheck, text: "Fluxo de operação já organizado desde o primeiro dia." },
-        { icon: Users, text: "Experiência de compra que incentiva recompra." },
+        { icon: Rocket, text: "Setup rapido, sem dor de cabeca." },
+        { icon: BadgeCheck, text: "Fluxo de operacao ja organizado desde o primeiro dia." },
+        { icon: Users, text: "Experiencia de compra que incentiva recompra." },
       ]}
       formEyebrow="Cadastro de lojista"
       formTitle="Criar minha conta"
-      formDescription="Crie a conta, escolha o plano e libera o painel sem enrolação."
+      formDescription="Crie a conta, escolha o plano e libera o painel sem enrolacao."
       formIcon={Store}
       backTo="/"
-      backLabel="Voltar para início"
+      backLabel="Voltar para inicio"
       secondaryTo="/"
       secondaryLabel="Ir para home"
       leftTone="dark"
       formTone="orange"
-      quickPoints={["Onboarding rápido", "Conta protegida", "Ativação sem gambiarra"]}
+      quickPoints={["Onboarding rapido", "Conta protegida", "Ativacao sem gambiarra"]}
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -88,7 +88,7 @@ export default function Register() {
               <FormItem>
                 <FormLabel>Nome completo</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ex: João Silva" autoComplete="name" {...field} />
+                  <Input placeholder="Ex: Joao Silva" autoComplete="name" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -140,7 +140,7 @@ export default function Register() {
                   </div>
                 </FormControl>
                 {capsLockOn ? (
-                  <p className="text-xs text-amber-700 inline-flex items-center gap-1">
+                  <p className="inline-flex items-center gap-1 text-xs text-amber-700">
                     <Lock className="h-3.5 w-3.5" />
                     Caps Lock ativado.
                   </p>
@@ -173,7 +173,7 @@ export default function Register() {
                       type="button"
                       onClick={() => setShowConfirmPassword((value) => !value)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:text-zinc-100"
-                      aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
+                      aria-label={showConfirmPassword ? "Ocultar confirmacao de senha" : "Mostrar confirmacao de senha"}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -186,21 +186,21 @@ export default function Register() {
 
           <Button
             type="submit"
-            className="w-full h-11 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="h-11 w-full cursor-pointer bg-zinc-900 text-zinc-100 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
             aria-busy={loading}
           >
-            {loading ? "Criando conta..." : "Criar conta grátis"}
-            {!loading && <ArrowRight className="h-4 w-4 ml-2" />}
+            {loading ? "Criando conta..." : "Criar conta gratis"}
+            {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
           </Button>
         </form>
       </Form>
 
-      <p className="text-center text-sm text-zinc-200 leading-relaxed">
-        Já tem conta?{" "}
+      <p className="text-center text-sm leading-relaxed text-zinc-200">
+        Ja tem conta?{" "}
         <Link
           to={`/login${searchParams.get("next") ? `?next=${encodeURIComponent(searchParams.get("next") || "")}` : ""}`}
-          className="text-zinc-100 font-semibold hover:text-white hover:underline"
+          className="font-semibold text-zinc-100 hover:text-white hover:underline"
         >
           Entrar agora
         </Link>
@@ -208,9 +208,3 @@ export default function Register() {
     </AuthSplitLayout>
   );
 }
-
-
-
-
-
-
