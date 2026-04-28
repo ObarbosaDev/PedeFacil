@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Copy, Plus, Pencil, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 import { validateImageFile } from "@/lib/security";
@@ -87,6 +87,27 @@ export default function Products() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Produto removido!");
     },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (product: any) => {
+      const payload = {
+        establishment_id: establishment!.id,
+        category_id: product.category_id || null,
+        name: `${product.name} (cópia)`,
+        description: product.description || null,
+        price: Number(product.price || 0),
+        image_url: product.image_url || null,
+        is_available: false,
+      };
+      const { error } = await supabase.from("products").insert(payload);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Produto duplicado e deixado pausado para revisão.");
+    },
+    onError: (error: Error) => toast.error(error.message || "Não rolou duplicar o produto."),
   });
 
   const resetForm = () => {
@@ -229,6 +250,9 @@ export default function Products() {
                   <p className="text-lg font-bold text-primary mt-1">{formatCurrency(Number(product.price))}</p>
                 </div>
                 <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => duplicateMutation.mutate(product)}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(product)}>
                     <Pencil className="h-4 w-4" />
                   </Button>

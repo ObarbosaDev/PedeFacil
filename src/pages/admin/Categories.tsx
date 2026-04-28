@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Categories() {
@@ -70,6 +70,22 @@ export default function Categories() {
     },
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: async (category: any) => {
+      const { error } = await supabase.from("categories").insert({
+        establishment_id: establishment!.id,
+        name: `${category.name} (cópia)`,
+        sort_order: categories.length,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast.success("Seção duplicada.");
+    },
+    onError: (error: Error) => toast.error(error.message || "Não rolou duplicar a seção."),
+  });
+
   if (!establishment) {
     return <p className="text-muted-foreground text-center py-12">Configura sua loja lá em "Minha Loja" primeiro.</p>;
   }
@@ -111,6 +127,9 @@ export default function Categories() {
                 <span className="font-medium">{category.name}</span>
               </div>
               <div className="flex gap-1">
+                <Button variant="ghost" size="icon" onClick={() => duplicateMutation.mutate(category)}>
+                  <Copy className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => { setEditing(category); setName(category.name); setDialogOpen(true); }}>
                   <Pencil className="h-4 w-4" />
                 </Button>

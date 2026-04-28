@@ -194,7 +194,7 @@ public class SupabaseAdminClient {
         .POST(HttpRequest.BodyPublishers.ofString(writeJson(row)))
         .build();
 
-    sendJson(request, "Supabase upsert payments_ledger");
+    sendWithoutBody(request, "Supabase upsert payments_ledger");
   }
 
   public int rolloverExpiredTrialsToPendingPayment(int limit) {
@@ -271,6 +271,32 @@ public class SupabaseAdminClient {
         row.path("failed_payments_lookback").asInt(0));
   }
 
+  public RateLimitResult enforceRateLimit(String actionKey, String subjectKey, int maxHits, int windowSeconds) {
+    String baseUrl = supabaseBaseUrl();
+    String uri = baseUrl + "/rest/v1/rpc/enforce_rate_limit";
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("p_action_key", actionKey);
+    body.put("p_subject_key", subjectKey);
+    body.put("p_max_hits", maxHits);
+    body.put("p_window_seconds", windowSeconds);
+
+    HttpRequest request = baseRequest(URI.create(uri))
+        .POST(HttpRequest.BodyPublishers.ofString(writeJson(body)))
+        .build();
+
+    JsonNode response = sendJson(request, "Supabase enforce_rate_limit");
+    if (!response.isArray() || response.size() == 0) {
+      return new RateLimitResult(true, 0, 0);
+    }
+
+    JsonNode row = response.get(0);
+    return new RateLimitResult(
+        row.path("allowed").asBoolean(true),
+        row.path("current_hits").asInt(0),
+        row.path("retry_after_seconds").asInt(0));
+  }
+
   private HttpRequest.Builder baseRequest(URI uri) {
     String serviceRole = required(properties.getSupabaseServiceRoleKey(), "SUPABASE_SERVICE_ROLE_KEY");
     return HttpRequest.newBuilder(uri)
@@ -289,6 +315,22 @@ public class SupabaseAdminClient {
             operation + " falhou. Status: " + statusCode + " Body: " + response.body());
       }
       return objectMapper.readTree(response.body());
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " interrompido", ex);
+    } catch (IOException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " falhou na comunicacao", ex);
+    }
+  }
+
+  private void sendWithoutBody(HttpRequest request, String operation) {
+    try {
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      int statusCode = response.statusCode();
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            operation + " falhou. Status: " + statusCode + " Body: " + response.body());
+      }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, operation + " interrompido", ex);
@@ -528,6 +570,30 @@ public class SupabaseAdminClient {
 
     public int getFailedPaymentsLookback() {
       return failedPaymentsLookback;
+    }
+  }
+
+  public static class RateLimitResult {
+    private final boolean allowed;
+    private final int currentHits;
+    private final int retryAfterSeconds;
+
+    public RateLimitResult(boolean allowed, int currentHits, int retryAfterSeconds) {
+      this.allowed = allowed;
+      this.currentHits = currentHits;
+      this.retryAfterSeconds = retryAfterSeconds;
+    }
+
+    public boolean isAllowed() {
+      return allowed;
+    }
+
+    public int getCurrentHits() {
+      return currentHits;
+    }
+
+    public int getRetryAfterSeconds() {
+      return retryAfterSeconds;
     }
   }
 }

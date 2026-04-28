@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import HelpCenterCard from "@/components/system/HelpCenterCard";
 import PageLoader from "@/components/system/PageLoader";
 import StateCard from "@/components/system/StateCard";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -62,6 +63,31 @@ type DriverAccountForm = {
   avatarUrl: string;
 };
 
+
+type DeliveryOrderAddress = {
+  delivery_street?: string | null;
+  delivery_number?: string | null;
+  delivery_neighborhood?: string | null;
+  delivery_city?: string | null;
+  delivery_state?: string | null;
+  delivery_zip_code?: string | null;
+};
+
+type DeliveryOrderContact = DeliveryOrderAddress & {
+  customer_phone?: string | null;
+  customer_name?: string | null;
+};
+
+type DriverStoreContact = {
+  name?: string | null;
+  whatsapp?: string | null;
+};
+
+type DriverUserMetadata = {
+  user_type?: string;
+  full_name?: string;
+  phone?: string;
+};
 const emptyDriverAccountForm: DriverAccountForm = {
   fullName: "",
   phone: "",
@@ -76,7 +102,7 @@ const emptyDriverAccountForm: DriverAccountForm = {
 
 const MIN_GEO_ACCURACY_METERS = 120;
 
-function buildAddress(order: any) {
+function buildAddress(order: DeliveryOrderAddress | null | undefined) {
   const parts = [
     [order?.delivery_street, order?.delivery_number].filter(Boolean).join(", "),
     order?.delivery_neighborhood,
@@ -86,7 +112,7 @@ function buildAddress(order: any) {
   return parts.join(" - ");
 }
 
-function buildMapsUrl(order: any) {
+function buildMapsUrl(order: DeliveryOrderAddress | null | undefined) {
   const query = encodeURIComponent(
     [
       order?.delivery_street,
@@ -102,7 +128,7 @@ function buildMapsUrl(order: any) {
   return `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
 
-function buildWazeUrl(order: any) {
+function buildWazeUrl(order: DeliveryOrderAddress | null | undefined) {
   const query = encodeURIComponent(
     [
       order?.delivery_street,
@@ -117,7 +143,7 @@ function buildWazeUrl(order: any) {
   return `https://waze.com/ul?q=${query}&navigate=yes`;
 }
 
-function buildCustomerWhatsAppUrl(order: any, store?: any) {
+function buildCustomerWhatsAppUrl(order: DeliveryOrderContact | null | undefined, store?: DriverStoreContact | null) {
   const phone = String(order?.customer_phone || "").replace(/\D/g, "");
   const withCountryCode = phone.startsWith("55") ? phone : `55${phone}`;
   const message = encodeURIComponent(
@@ -126,7 +152,7 @@ function buildCustomerWhatsAppUrl(order: any, store?: any) {
   return `https://wa.me/${withCountryCode}?text=${message}`;
 }
 
-function buildStoreWhatsAppUrl(store?: any, order?: any) {
+function buildStoreWhatsAppUrl(store?: DriverStoreContact | null, order?: DeliveryOrderContact | null) {
   const phone = String(store?.whatsapp || "").replace(/\D/g, "");
   const withCountryCode = phone.startsWith("55") ? phone : `55${phone}`;
   const message = encodeURIComponent(
@@ -144,7 +170,8 @@ function getDeliveryOperationCopy(mode?: string | null) {
 export default function DriverPanel() {
   const { user, loading, signOut } = useAuth();
   const queryClient = useQueryClient();
-  const userType = String((user?.user_metadata as any)?.user_type || "");
+  const userMetadata = (user?.user_metadata ?? {}) as DriverUserMetadata;
+  const userType = String(userMetadata.user_type || "");
   const [hasAttemptedProfileSetup, setHasAttemptedProfileSetup] = useState(false);
   const [issueDraftByDelivery, setIssueDraftByDelivery] = useState<Record<string, string>>({});
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator === "undefined" ? true : navigator.onLine));
@@ -191,9 +218,9 @@ export default function DriverPanel() {
         .is("user_id", null)
         .select("id");
       if (linkError) throw linkError;
-      if (Array.isArray(linkedRows) && linkedRows.length > 0) return;
-      const fullName = String((user.user_metadata as any)?.full_name || user.email?.split("@")[0] || "Entregador");
-      const phone = String((user.user_metadata as any)?.phone || "").trim() || "A confirmar";
+      const userProfileMetadata = (user.user_metadata ?? {}) as DriverUserMetadata;
+      const fullName = String(userProfileMetadata.full_name || user.email?.split("@")[0] || "Entregador");
+      const phone = String(userProfileMetadata.phone || "").trim() || "A confirmar";
       const { error: insertError } = await (supabase as any).from("delivery_drivers").insert({
         establishment_id: null,
         user_id: user.id,
@@ -302,6 +329,7 @@ export default function DriverPanel() {
     data: deliveries = [],
     isError: isDeliveriesError,
     error: deliveriesError,
+    refetch: refetchDriverDeliveries,
   } = useQuery({
     queryKey: ["driver-deliveries", driverProfile?.id],
     queryFn: async () => {
@@ -342,7 +370,7 @@ export default function DriverPanel() {
     enabled: !!driverProfile?.id,
   });
 
-  const { data: availableOffers = [], isLoading: loadingOffers } = useQuery({
+  const { data: availableOffers = [], isLoading: loadingOffers, refetch: refetchDriverOffers } = useQuery({
     queryKey: ["driver-available-offers", driverProfile?.id],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_available_driver_offers");
@@ -1007,11 +1035,11 @@ export default function DriverPanel() {
       <div className="min-h-screen flex items-center justify-center p-6 bg-muted/30">
         <div className="w-full max-w-lg">
           <StateCard
-            title="Seu acesso ainda n?o ficou pronto"
-            description="Tentamos preparar seu cadastro de entregador, mas essa etapa ainda n?o fechou."
+            title="Seu acesso ainda não ficou pronto"
+            description="Tentamos preparar seu cadastro de entregador, mas essa etapa ainda não fechou."
           >
             <p className="text-sm text-muted-foreground">
-              Recarregue a p?gina. Se continuar igual, a? sim vale acionar o suporte para revisar seu cadastro.
+              Recarregue a página. Se continuar igual, aí sim vale acionar o suporte para revisar seu cadastro.
             </p>
             <Button className="w-full" onClick={() => window.location.reload()}>
               Tentar de novo
@@ -1495,7 +1523,15 @@ export default function DriverPanel() {
                 action={() => window.location.reload()}
               />
             ) : filteredVisibleDeliveries.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem corridas ativas no momento.</p>
+              <StateCard
+                title="Sem corridas ativas no momento"
+                description="Quando aparecer oferta nova ou entrega em rota, ela entra aqui com contato, endereço e próximos passos."
+                actionLabel="Atualizar painel"
+                action={() => {
+                  void refetchDriverDeliveries();
+                  void refetchDriverOffers();
+                }}
+              />
             ) : (
               filteredVisibleDeliveries.map((delivery: any) => {
                 const order = delivery.orders;
@@ -1830,10 +1866,35 @@ export default function DriverPanel() {
             )}
           </CardContent>
         </Card>
+        <HelpCenterCard
+          title="Ajuda rápida para quem está na rua"
+          description="Se travar corrida, rota, PIN ou contato, resolve por aqui sem perder tempo."
+          supportMessage="Oi! Preciso de ajuda no painel do entregador."
+          topics={[
+            {
+              title: "Aceite e oferta",
+              description: "Se a corrida sumiu ou falhou ao aceitar, atualize o painel e confira seu modo de disponibilidade.",
+            },
+            {
+              title: "Rota e endereço",
+              description: "Google Maps e Waze devem abrir com o destino correto da corrida ativa.",
+            },
+            {
+              title: "PIN e prova de entrega",
+              description: "Use o PIN e a foto para concluir do jeito certo e evitar baixa errada.",
+            },
+            {
+              title: "Ocorrência",
+              description: "Se deu ruim no trajeto, registra a ocorrência antes de forçar mudança manual.",
+            },
+          ]}
+        />
       </div>
     </div>
   );
 }
+
+
 
 
 

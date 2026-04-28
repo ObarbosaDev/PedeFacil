@@ -4,6 +4,22 @@ server:
 spring:
   application:
     name: pedefacil-whatsapp-receiver
+  datasource:
+    url: ${DATABASE_URL:}
+    username: ${DATABASE_USERNAME:}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQL10Dialect
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    locations: classpath:db/migration
 
 automation:
   receiver-token: ${PEDEFACIL_RECEIVER_TOKEN:}
@@ -46,4 +62,14 @@ payments:
   mercadopago-webhook-token: ${MERCADOPAGO_WEBHOOK_TOKEN:}
   supabase-url: ${SUPABASE_URL:}
   supabase-service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+
+platform:
+  auth:
+    app-base-url: ${APP_BASE_URL:http://localhost:5173}
+    jwt-secret: ${APP_AUTH_JWT_SECRET:}
+    access-token-minutes: ${APP_AUTH_ACCESS_TOKEN_MINUTES:30}
+    refresh-token-days: ${APP_AUTH_REFRESH_TOKEN_DAYS:30}
+    email-verification-token-hours: ${APP_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS:24}
+    password-reset-token-minutes: ${APP_AUTH_PASSWORD_RESET_TOKEN_MINUTES:30}
+    debug-expose-tokens: ${APP_AUTH_DEBUG_EXPOSE_TOKENS:false}
 

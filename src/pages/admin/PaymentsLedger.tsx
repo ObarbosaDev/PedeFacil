@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import StateCard from "@/components/system/StateCard";
+import HelpCenterCard from "@/components/system/HelpCenterCard";
 import { formatCurrency, formatDate, PAYMENT_METHOD_LABELS } from "@/lib/formatters";
 import { CreditCard, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import { toast } from "sonner";
@@ -400,6 +402,38 @@ export default function PaymentsLedger() {
     ].join("\n");
   }, [metrics, paymentMethodFilter, periodLabel, settlement, statusFilter]);
 
+  const manualReviewRows = useMemo(() => {
+    const now = Date.now();
+    return rows
+      .map((row) => {
+        const order = row.orderPayment?.orders;
+        const normalizedStatus = String(row.status || "").toLowerCase();
+        const processedAt = new Date(row.processed_at).getTime();
+        const ageMinutes = Math.max(0, Math.round((now - processedAt) / 60000));
+        const reasons: string[] = [];
+
+        if (!order && row.sourceType === "unknown") reasons.push("Evento sem vínculo local");
+        if (normalizedStatus === "approved" && order && order.payment_status !== "paid") {
+          reasons.push("Evento aprovado, mas pedido ainda não ficou pago");
+        }
+        if (["pending", "pending_payment", "in_process"].includes(normalizedStatus) && ageMinutes >= 20) {
+          reasons.push("Pagamento pendente há tempo demais");
+        }
+        if (row.provider_event_id && rows.filter((item) => item.provider_event_id === row.provider_event_id).length > 1) {
+          reasons.push("Mesmo event id apareceu mais de uma vez");
+        }
+
+        return {
+          ...row,
+          order,
+          ageMinutes,
+          reasons,
+        };
+      })
+      .filter((row) => row.reasons.length > 0)
+      .sort((a, b) => b.ageMinutes - a.ageMinutes);
+  }, [rows]);
+
   const copyFinanceClosing = async () => {
     try {
       await navigator.clipboard.writeText(financeClosingText);
@@ -511,7 +545,10 @@ export default function PaymentsLedger() {
             ) : error ? (
               <div className="text-sm text-destructive">Não rolou carregar o financeiro agora.</div>
             ) : rows.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Nenhum evento encontrado.</div>
+              <StateCard
+                title="Nenhum evento encontrado"
+                description="Ainda não caiu nada nessa janela. Se você esperava movimento, confira o período e os filtros."
+              />
             ) : (
               rows.map((row) => {
                 const order = row.orderPayment?.orders;
@@ -614,6 +651,39 @@ export default function PaymentsLedger() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-xl border p-4 bg-muted/30">
+              <p className="font-semibold">Fila de revisão manual</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {manualReviewRows.length > 0
+                  ? `${manualReviewRows.length} evento(s) merecem olhar humano antes de você confiar no fechamento.`
+                  : "Nenhum evento gritando por revisão agora."}
+              </p>
+              <div className="mt-3 space-y-2">
+                {manualReviewRows.length === 0 ? (
+                  <StateCard
+                    title="Sem revisão pendente"
+                    description="Boa. O que apareceu aqui bate com o esperado da operação."
+                  />
+                ) : (
+                  manualReviewRows.slice(0, 4).map((row) => (
+                    <div key={row.id} className="rounded-lg border bg-background p-3">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <p className="text-sm font-semibold break-all">{row.checkout_session_id}</p>
+                        <Badge variant="outline">há {row.ageMinutes} min</Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {row.order?.customer_name || row.subscription?.plan_slug || "Sem vínculo"} • {row.status}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        {row.reasons.map((reason) => (
+                          <li key={reason}>• {reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="rounded-xl border p-4 bg-muted/30">
               <p className="font-semibold">Fechamento direto</p>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -659,6 +729,25 @@ export default function PaymentsLedger() {
                 Próximo nível aqui é repasse: separar o que é da loja, da plataforma e do entregador sem bagunçar a operação.
               </p>
             </div>
+            <HelpCenterCard
+              title="Quando o financeiro sair do trilho"
+              description="Atalhos práticos para não deixar cobrança pendurada virar dor maior."
+              supportMessage="Preciso de apoio para revisar eventos de pagamento e conciliação da loja."
+              topics={[
+                {
+                  title: "Evento aprovado, pedido não pago",
+                  description: "Revise webhook, status local e duplicidade por session. Se necessário, revalide antes de mexer manualmente.",
+                },
+                {
+                  title: "Session sem vínculo",
+                  description: "Confira se o checkout foi salvo no banco ou se o evento chegou antes da gravação local.",
+                },
+                {
+                  title: "Pendente há tempo demais",
+                  description: "Se passou do tempo normal do meio de pagamento, trate como revisão manual e alinhe com suporte ou cliente.",
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       </div>

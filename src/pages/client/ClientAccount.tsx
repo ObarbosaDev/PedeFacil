@@ -1,4 +1,4 @@
-ï»¿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate, ORDER_STATUS_LABELS } from "@/lib/formatters";
 import { logAuditEvent } from "@/lib/observability";
 import { PASSWORD_RULE, passwordRegex } from "@/lib/security";
@@ -76,6 +86,12 @@ type OrderHistoryRow = {
   } | null;
 };
 
+type ConfirmAction =
+  | { type: "signout" }
+  | { type: "delete-address"; id: string }
+  | { type: "revoke-device"; id: string };
+
+
 const emptyAddress = {
   label: "Casa",
   street: "",
@@ -106,12 +122,54 @@ export default function ClientAccount() {
     newPassword: "",
     confirmNewPassword: "",
   });
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const handleSignOut = async () => {
-    const confirmed = window.confirm("Quer mesmo sair da sua conta agora?");
-    if (!confirmed) return;
     await signOut();
   };
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return;
+
+    if (confirmAction.type === "signout") {
+      setConfirmAction(null);
+      await handleSignOut();
+      return;
+    }
+
+    if (confirmAction.type === "delete-address") {
+      deleteAddressMutation.mutate(confirmAction.id);
+      setConfirmAction(null);
+      return;
+    }
+
+    revokeTrustedDeviceMutation.mutate(confirmAction.id);
+    setConfirmAction(null);
+  };
+
+  const confirmDialogCopy = useMemo(() => {
+    if (!confirmAction) return null;
+    if (confirmAction.type === "signout") {
+      return {
+        title: "Sair da conta agora?",
+        description: "Você volta para a área pública e precisa entrar de novo para acessar seu perfil, endereços e histórico.",
+        actionLabel: "Sair da conta",
+      };
+    }
+    if (confirmAction.type === "delete-address") {
+      return {
+        title: "Remover este endereço?",
+        description: "Esse endereço sai da sua conta e deixa de aparecer nos atalhos do checkout.",
+        actionLabel: "Remover endereço",
+      };
+    }
+    return {
+      title: "Remover este dispositivo?",
+      description: "Esse navegador perde o acesso confiável e volta a pedir código por e-mail no login.",
+      actionLabel: "Remover dispositivo",
+    };
+  }, [confirmAction]);
+
 
   const { data: profile } = useQuery<CustomerProfile | null>({
     queryKey: ["customer-profile", user?.id],
@@ -267,7 +325,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["customer-profile", user?.id] });
       toast.success("Perfil salvo com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou salvar seu perfil."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar seu perfil."),
   });
 
   const saveAddressMutation = useMutation({
@@ -287,7 +345,7 @@ export default function ClientAccount() {
       };
 
       if (!payload.street || !payload.number || !payload.neighborhood || !payload.city || !payload.state || !payload.zip_code) {
-        throw new Error("Preencha os campos obrigatÃ³rios do endereÃ§o.");
+        throw new Error("Preencha os campos obrigatórios do endereço.");
       }
 
       const { error } = await (supabase as any).from("customer_addresses").insert(payload);
@@ -308,9 +366,9 @@ export default function ClientAccount() {
     onSuccess: () => {
       setAddressForm(emptyAddress);
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
-      toast.success("EndereÃ§o salvo.");
+      toast.success("Endereço salvo.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou salvar o endereÃ§o."),
+    onError: (error: any) => toast.error(error.message || "Não rolou salvar o endereço."),
   });
 
   const setDefaultAddressMutation = useMutation({
@@ -338,9 +396,9 @@ export default function ClientAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
-      toast.success("EndereÃ§o padrÃ£o atualizado.");
+      toast.success("Endereço padrão atualizado.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou atualizar o endereÃ§o padrÃ£o."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar o endereço padrão."),
   });
 
   const deleteAddressMutation = useMutation({
@@ -362,9 +420,9 @@ export default function ClientAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-addresses", user?.id] });
-      toast.success("EndereÃ§o removido.");
+      toast.success("Endereço removido.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou remover o endereÃ§o."),
+    onError: (error: any) => toast.error(error.message || "Não rolou remover o endereço."),
   });
 
   const reorderMutation = useMutation({
@@ -373,7 +431,7 @@ export default function ClientAccount() {
       const store = order?.establishments;
 
       if (!order || !store?.slug) {
-        throw new Error("NÃ£o rolou refazer esse pedido agora.");
+        throw new Error("Não rolou refazer esse pedido agora.");
       }
 
       const ids = (order.order_items || [])
@@ -381,7 +439,7 @@ export default function ClientAccount() {
         .filter((id): id is string => !!id);
 
       if (!ids.length) {
-        throw new Error("Esse pedido nÃ£o tem itens disponÃ­veis para recompra.");
+        throw new Error("Esse pedido não tem itens disponíveis para recompra.");
       }
 
       const { data: products, error } = await supabase
@@ -419,7 +477,7 @@ export default function ClientAccount() {
       }
 
       if (!cartPayload.length) {
-        throw new Error("Nenhum item desse pedido estÃ¡ disponÃ­vel no cardÃ¡pio atual.");
+        throw new Error("Nenhum item desse pedido está disponível no cardápio atual.");
       }
 
       return { cartPayload, storeSlug: store.slug, orderId: order.id, unavailableCount };
@@ -441,14 +499,14 @@ export default function ClientAccount() {
       });
 
       if (unavailableCount > 0) {
-        toast.success(`Recompra pronta. ${unavailableCount} item(ns) nÃ£o estavam disponÃ­veis e saÃ­ram do carrinho.`);
+        toast.success(`Recompra pronta. ${unavailableCount} item(ns) não estavam disponíveis e saíram do carrinho.`);
       } else {
         toast.success("Recompra pronta. Seu carrinho foi preenchido.");
       }
 
       navigate(`/loja/${storeSlug}/checkout`);
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou refazer o pedido."),
+    onError: (error: any) => toast.error(error.message || "Não rolou refazer o pedido."),
   });
 
   const changePasswordMutation = useMutation({
@@ -465,7 +523,7 @@ export default function ClientAccount() {
       }
 
       if (nextPassword !== confirmPassword) {
-        throw new Error("As senhas nÃ£o conferem.");
+        throw new Error("As senhas não conferem.");
       }
 
       await updatePassword(nextPassword);
@@ -482,7 +540,7 @@ export default function ClientAccount() {
       setPasswordForm({ newPassword: "", confirmNewPassword: "" });
       toast.success("Senha atualizada com sucesso.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou atualizar sua senha."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar sua senha."),
   });
 
   const updateSecuritySettingsMutation = useMutation({
@@ -491,9 +549,9 @@ export default function ClientAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-security-settings", user?.id] });
-      toast.success("ConfiguraÃ§Ãµes de seguranÃ§a atualizadas.");
+      toast.success("Configurações de segurança atualizadas.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou atualizar as configuraÃ§Ãµes de seguranÃ§a."),
+    onError: (error: any) => toast.error(error.message || "Não rolou atualizar as configurações de segurança."),
   });
 
   const trustCurrentDeviceMutation = useMutation({
@@ -504,7 +562,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
       toast.success("Este dispositivo foi adicionado como confiavel.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou confiar neste dispositivo."),
+    onError: (error: any) => toast.error(error.message || "Não rolou confiar neste dispositivo."),
   });
 
   const revokeTrustedDeviceMutation = useMutation({
@@ -513,7 +571,7 @@ export default function ClientAccount() {
       queryClient.invalidateQueries({ queryKey: ["trusted-devices", user?.id] });
       toast.success("Dispositivo removido da lista de confiaveis.");
     },
-    onError: (error: any) => toast.error(error.message || "NÃ£o rolou remover o dispositivo."),
+    onError: (error: any) => toast.error(error.message || "Não rolou remover o dispositivo."),
   });
 
   if (!loading && !user) return <Navigate to="/cliente/login" replace />;
@@ -533,7 +591,7 @@ export default function ClientAccount() {
               Voltar para lojas
             </Button>
           </Link>
-          <Button variant="ghost" onClick={handleSignOut}>
+          <Button variant="ghost" onClick={() => setConfirmAction({ type: "signout" })}>
             Sair da conta
           </Button>
         </div>
@@ -546,17 +604,17 @@ export default function ClientAccount() {
                 Painel do cliente
               </div>
               <h1 className="mt-4 text-3xl font-black tracking-tight md:text-4xl">
-                Sua conta pronta para pedir rÃ¡pido, sem enrolaÃ§Ã£o.
+                Sua conta pronta para pedir rápido, sem enrolação.
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
-                Perfil salvo, endereÃ§o na mÃ£o, seguranÃ§a redonda e histÃ³rico pronto para repetir pedido sem perder tempo.
+                Perfil salvo, endereço na mão, segurança redonda e histórico pronto para repetir pedido sem perder tempo.
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Pedidos</p>
                   <p className="mt-3 text-3xl font-black">{accountMetrics.orders}</p>
-                  <p className="mt-2 text-sm text-zinc-400">HistÃ³rico jÃ¡ registrado.</p>
+                  <p className="mt-2 text-sm text-zinc-400">Histórico já registrado.</p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Pagos</p>
@@ -564,14 +622,14 @@ export default function ClientAccount() {
                   <p className="mt-2 text-sm text-zinc-400">Compras com pagamento confirmado.</p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">EndereÃ§os</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Endereços</p>
                   <p className="mt-3 text-3xl font-black">{accountMetrics.addresses}</p>
                   <p className="mt-2 text-sm text-zinc-400">Pontos salvos para checkout.</p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Total no app</p>
                   <p className="mt-3 text-2xl font-black">{formatCurrency(accountMetrics.totalSpent)}</p>
-                  <p className="mt-2 text-sm text-zinc-400">Leitura rÃ¡pida do seu uso.</p>
+                  <p className="mt-2 text-sm text-zinc-400">Leitura rápida do seu uso.</p>
                 </div>
               </div>
             </div>
@@ -583,7 +641,7 @@ export default function ClientAccount() {
                   <>
                     <h2 className="mt-3 text-2xl font-black tracking-tight">{activeOrder.orders.establishments.name}</h2>
                     <p className="mt-2 text-sm text-zinc-400">
-                      {ORDER_STATUS_LABELS[activeOrder.orders.status] || activeOrder.orders.status} â€¢ {getOrderTypeLabel(activeOrder.orders.order_type)}
+                      {ORDER_STATUS_LABELS[activeOrder.orders.status] || activeOrder.orders.status} • {getOrderTypeLabel(activeOrder.orders.order_type)}
                     </p>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -613,9 +671,9 @@ export default function ClientAccount() {
                   </>
                 ) : (
                   <>
-                    <h2 className="mt-3 text-2xl font-black tracking-tight">Conta pronta para o prÃ³ximo pedido</h2>
+                    <h2 className="mt-3 text-2xl font-black tracking-tight">Conta pronta para o próximo pedido</h2>
                     <p className="mt-2 text-sm text-zinc-400">
-                      Assim que vocÃª fechar uma compra, o pedido ativo aparece aqui com status e atalhos rÃ¡pidos.
+                      Assim que você fechar uma compra, o pedido ativo aparece aqui com status e atalhos rápidos.
                     </p>
                   </>
                 )}
@@ -626,9 +684,9 @@ export default function ClientAccount() {
 
         <div className="grid gap-3 md:grid-cols-4">
           <a href="#perfil-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Perfil</a>
-          <a href="#enderecos-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">EndereÃ§os</a>
-          <a href="#seguranca-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">SeguranÃ§a</a>
-          <a href="#historico-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">HistÃ³rico</a>
+          <a href="#enderecos-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Endereços</a>
+          <a href="#seguranca-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Segurança</a>
+          <a href="#historico-cliente" className="rounded-2xl border border-zinc-950/10 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-primary/30 hover:text-zinc-950">Histórico</a>
         </div>
 
         <Card id="perfil-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
@@ -667,7 +725,7 @@ export default function ClientAccount() {
         <Card id="enderecos-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle>Enderecos</CardTitle>
-            <CardDescription>Cadastre seus endereÃ§os para o checkout preencher automÃ¡tico.</CardDescription>
+            <CardDescription>Cadastre seus endereços para o checkout preencher automático.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -711,12 +769,12 @@ export default function ClientAccount() {
 
             <Button onClick={() => saveAddressMutation.mutate()} disabled={saveAddressMutation.isPending}>
               <Plus className="h-4 w-4 mr-2" />
-              {saveAddressMutation.isPending ? "Salvando endereÃ§o..." : "Adicionar endereÃ§o"}
+              {saveAddressMutation.isPending ? "Salvando endereço..." : "Adicionar endereço"}
             </Button>
 
             <div className="space-y-2">
               {addresses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum endereÃ§o cadastrado ainda.</p>
+                <p className="text-sm text-muted-foreground">Nenhum endereço cadastrado ainda.</p>
               ) : (
                 addresses.map((address) => (
                   <div key={address.id} className="rounded-lg border p-3 flex items-start justify-between gap-3">
@@ -737,7 +795,7 @@ export default function ClientAccount() {
                           Tornar padrao
                         </Button>
                       )}
-                      <Button variant="destructive" size="sm" onClick={() => deleteAddressMutation.mutate(address.id)}>
+                      <Button variant="destructive" size="sm" onClick={() => setConfirmAction({ type: "delete-address", id: address.id })}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -752,7 +810,7 @@ export default function ClientAccount() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5 text-primary" />
-              SeguranÃ§a da conta
+              Segurança da conta
             </CardTitle>
             <CardDescription>Atualize sua senha e deixe sua conta redonda, sem brecha boba.</CardDescription>
           </CardHeader>
@@ -789,8 +847,8 @@ export default function ClientAccount() {
             <div className="rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold">CÃ³digo por e-mail no login</p>
-                  <p className="text-xs text-muted-foreground">Se ativar, alÃ©m da senha vocÃª confirma o acesso com cÃ³digo no e-mail.</p>
+                  <p className="font-semibold">Código por e-mail no login</p>
+                  <p className="text-xs text-muted-foreground">Se ativar, além da senha você confirma o acesso com código no e-mail.</p>
                 </div>
                 <Switch
                   checked={!!securitySettings?.otp_enabled}
@@ -800,8 +858,8 @@ export default function ClientAccount() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold">VerificaÃ§Ã£o extra para aÃ§Ãµes sensÃ­veis</p>
-                  <p className="text-xs text-muted-foreground">Pede uma confirmaÃ§Ã£o a mais quando vocÃª mexer no que Ã© crÃ­tico.</p>
+                  <p className="font-semibold">Verificação extra para ações sensíveis</p>
+                  <p className="text-xs text-muted-foreground">Pede uma confirmação a mais quando você mexer no que é crítico.</p>
                 </div>
                 <Switch
                   checked={!!securitySettings?.require_step_up_for_critical_actions}
@@ -816,8 +874,8 @@ export default function ClientAccount() {
             <div className="rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="font-semibold">Dispositivos confiÃ¡veis</p>
-                  <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular o cÃ³digo por e-mail.</p>
+                  <p className="font-semibold">Dispositivos confiáveis</p>
+                  <p className="text-xs text-muted-foreground">Gerencie os navegadores que podem pular o código por e-mail.</p>
                 </div>
                 <Button variant="outline" onClick={() => trustCurrentDeviceMutation.mutate()} disabled={trustCurrentDeviceMutation.isPending}>
                   Confiar neste dispositivo
@@ -825,20 +883,20 @@ export default function ClientAccount() {
               </div>
 
               {trustedDevices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Ainda nÃ£o tem dispositivo confiÃ¡vel cadastrado.</p>
+                <p className="text-sm text-muted-foreground">Ainda não tem dispositivo confiável cadastrado.</p>
               ) : (
                 trustedDevices.map((device) => (
                   <div key={device.id} className="rounded-md border p-3 flex items-center justify-between gap-2 flex-wrap">
                     <div>
                       <p className="font-medium">{device.device_label || "Dispositivo"}</p>
                       <p className="text-xs text-muted-foreground">
-                        Ãšltimo uso: {formatDate(device.last_used_at)}
+                        Último uso: {formatDate(device.last_used_at)}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => revokeTrustedDeviceMutation.mutate(device.id)}
+                      onClick={() => setConfirmAction({ type: "revoke-device", id: device.id })}
                       disabled={revokeTrustedDeviceMutation.isPending}
                     >
                       Remover
@@ -850,10 +908,23 @@ export default function ClientAccount() {
           </CardContent>
         </Card>
 
+        <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmDialogCopy?.title}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmDialogCopy?.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continuar aqui</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmAction}>{confirmDialogCopy?.actionLabel || "Confirmar"}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <Card id="historico-cliente" className="overflow-hidden rounded-[28px] border-zinc-950/10 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
           <CardHeader>
-            <CardTitle>HistÃ³rico de pedidos</CardTitle>
-            <CardDescription>Seus Ãºltimos pedidos para repetir sem perder tempo.</CardDescription>
+            <CardTitle>Histórico de pedidos</CardTitle>
+            <CardDescription>Seus últimos pedidos para repetir sem perder tempo.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 md:grid-cols-[1fr_220px]">
@@ -951,6 +1022,9 @@ export default function ClientAccount() {
     </div>
   );
 }
+
+
+
 
 
 

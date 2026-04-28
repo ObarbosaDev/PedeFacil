@@ -8,11 +8,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import HelpCenterCard from "@/components/system/HelpCenterCard";
+import StateCard from "@/components/system/StateCard";
 import { formatCurrency, formatDate, ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/formatters";
 import { logAuditEvent } from "@/lib/observability";
 import { buildWhatsAppSupportLink } from "@/lib/support";
 import { toast } from "sonner";
+
+type AudioWindow = Window & typeof globalThis & {
+  webkitAudioContext?: typeof AudioContext;
+};
+
+type OrdersEstablishmentOps = {
+  id?: string | null;
+  delivery_operation_mode?: string | null;
+  dispatch_timeout_seconds?: number | null;
+  default_driver_payout?: number | null;
+  auto_dispatch_enabled?: boolean | null;
+};
 
 const statusFlow = ["received", "confirmed", "in_preparation", "ready", "delivered"];
 const kanbanColumns = ["received", "confirmed", "in_preparation", "ready", "delivered"];
@@ -42,6 +66,14 @@ const statusTone: Record<string, string> = {
   ready: "border-l-emerald-500",
   delivered: "border-l-zinc-400",
 };
+
+function getScheduledOrderBucket(date: Date) {
+  const hour = date.getHours();
+  if (hour < 11) return "Manhã";
+  if (hour < 15) return "Almoço";
+  if (hour < 19) return "Tarde";
+  return "Noite";
+}
 
 const quickStatusActions: Record<string, { label: string; next: string }[]> = {
   received: [{ label: "Confirmar", next: "confirmed" }],
@@ -76,7 +108,7 @@ function buildCustomerWhatsAppUrl(phone: string, customerName?: string) {
   const sanitized = String(phone || "").replace(/\D/g, "");
   const withCountryCode = sanitized.startsWith("55") ? sanitized : `55${sanitized}`;
   const message = encodeURIComponent(
-    `Oi${customerName ? `, ${customerName}` : ""}. Aqui é da operação da Pede Fácil. Estamos falando sobre o seu pedido.`
+    `Oi${customerName ? `, ${customerName}` : ""}. Aqui e da operacao da Pede Facil. Estamos falando sobre o seu pedido.`
   );
   return `https://wa.me/${withCountryCode}?text=${message}`;
 }
@@ -86,14 +118,14 @@ function getSlaColumnTone(lateRatio: number) {
     return {
       dot: "bg-red-500",
       badgeVariant: "destructive" as const,
-      label: "Crítico",
+      label: "Critico",
     };
   }
   if (lateRatio >= 0.15) {
     return {
       dot: "bg-amber-500",
       badgeVariant: "secondary" as const,
-      label: "Atenção",
+      label: "Atencao",
     };
   }
   return {
@@ -105,7 +137,10 @@ function getSlaColumnTone(lateRatio: number) {
 
 function playNewOrderSound() {
   try {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioWindow = window as AudioWindow;
+    const AudioCtor = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+    if (!AudioCtor) return;
+    const audioCtx = new AudioCtor();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
@@ -128,7 +163,10 @@ function playNewOrderSound() {
 
 function playSlaAlertSound() {
   try {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioWindow = window as AudioWindow;
+    const AudioCtor = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+    if (!AudioCtor) return;
+    const audioCtx = new AudioCtor();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
@@ -159,6 +197,7 @@ export default function Orders() {
   const [driverFilter, setDriverFilter] = useState<string>("all");
   const [selectedDriverByOrder, setSelectedDriverByOrder] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
+  const [confirmPaymentOrderId, setConfirmPaymentOrderId] = useState<string | null>(null);
   const hasBootstrappedOrders = useRef(false);
   const knownOrderIds = useRef<Set<string>>(new Set());
   const autoRedispatchingOrderIds = useRef<Set<string>>(new Set());
@@ -179,11 +218,13 @@ export default function Orders() {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
+  const establishmentOps = establishment as (typeof establishment & OrdersEstablishmentOps) | null;
 
   const canUseSharedFleet = useMemo(() => {
-    const mode = String((establishment as any)?.delivery_operation_mode || "own_fleet");
+    const mode = String(establishmentOps?.delivery_operation_mode || "own_fleet");
     return mode === "shared_fleet" || mode === "hybrid";
-  }, [establishment]);
+  }, [establishmentOps]);
+
 
   const { data: slaSettings } = useQuery({
     queryKey: ["establishment-sla-settings", establishment?.id],
@@ -392,7 +433,7 @@ export default function Orders() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-orders", establishment?.id] });
       toast.success("Pagamento confirmado no pedido.");
     },
-    onError: (error: any) => toast.error(error.message || "Não rolou confirmar o pagamento."),
+    onError: (error: any) => toast.error(error.message || "Nao rolou confirmar o pagamento."),
   });
 
   const dispatchDelivery = useMutation({
@@ -400,9 +441,9 @@ export default function Orders() {
       const selectedDriver = (deliveryDrivers as any[]).find((driver) => driver.id === driverId);
       const dispatchTimeoutSeconds = Math.min(
         300,
-        Math.max(15, Number((establishment as any)?.dispatch_timeout_seconds || 30))
+        Math.max(15, Number(establishmentOps?.dispatch_timeout_seconds || 30))
       );
-      const defaultDriverPayout = Math.max(0, Number((establishment as any)?.default_driver_payout || 0));
+      const defaultDriverPayout = Math.max(0, Number(establishmentOps?.default_driver_payout || 0));
       const { data: currentDelivery, error: currentDeliveryError } = await (supabase as any)
         .from("order_deliveries")
         .select("*")
@@ -485,7 +526,7 @@ export default function Orders() {
       queryClient.invalidateQueries({ queryKey: ["delivery-drivers", establishment?.id] });
       toast.success("Entrega despachada.");
     },
-    onError: (error: any) => toast.error(error.message || "Não rolou despachar agora."),
+    onError: (error: any) => toast.error(error.message || "Nao rolou despachar agora."),
   });
 
   const orderIds = useMemo(() => orders.map((order: any) => order.id), [orders]);
@@ -593,7 +634,7 @@ export default function Orders() {
     score += Math.min(completed, 60) * 3;
     score += avgRating * 30;
     score -= lateAcceptances * 18;
-    score += isSharedDriver ? (String((establishment as any)?.delivery_operation_mode || "") === "shared_fleet" ? 35 : -10) : 40;
+    score += isSharedDriver ? (String(establishmentOps?.delivery_operation_mode || "") === "shared_fleet" ? 35 : -10) : 40;
     if (isCurrentDriver) score -= 1000;
 
     return score;
@@ -619,7 +660,7 @@ export default function Orders() {
 
   useEffect(() => {
     if (!establishment?.id || !(orderDeliveries as any[]).length || !(deliveryDrivers as any[]).length) return;
-    if ((establishment as any)?.auto_dispatch_enabled === false) return;
+    if (establishmentOps?.auto_dispatch_enabled === false) return;
 
     const expiredAssignedDeliveries = (orderDeliveries as any[]).filter((delivery) => {
       if (delivery.status !== "assigned" || !delivery.accepted_deadline_at) return false;
@@ -653,7 +694,7 @@ export default function Orders() {
 
   useEffect(() => {
     if (!establishment?.id || !(deliveryDrivers as any[]).length || !orders.length) return;
-    if ((establishment as any)?.auto_dispatch_enabled === false) return;
+    if (establishmentOps?.auto_dispatch_enabled === false) return;
 
     const ordersWithoutDispatch = orders.filter((order: any) => {
       if (order.order_type !== "delivery") return false;
@@ -770,7 +811,7 @@ export default function Orders() {
     const currentLateCount = lateOrders.length;
     if (currentLateCount > previousLateCount.current) {
       playSlaAlertSound();
-      toast.warning(`Atenção: ${currentLateCount} pedido(s) com SLA estourado.`);
+      toast.warning(`Atencao: ${currentLateCount} pedido(s) com SLA estourado.`);
     }
     previousLateCount.current = currentLateCount;
   }, [lateOrders.length]);
@@ -804,6 +845,26 @@ export default function Orders() {
       })
       .sort((a: any, b: any) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime());
   }, [driverFilteredOrders]);
+
+  const scheduledAgenda = useMemo(() => {
+    const groups = scheduledOrders.reduce<Record<string, any[]>>((acc, order: any) => {
+      const scheduledDate = new Date(order.scheduled_for);
+      const bucket = `${scheduledDate.toLocaleDateString("pt-BR")} • ${getScheduledOrderBucket(scheduledDate)}`;
+      if (!acc[bucket]) acc[bucket] = [];
+      acc[bucket].push(order);
+      return acc;
+    }, {});
+
+    return Object.entries(groups).map(([label, items]) => ({
+      label,
+      items,
+      revenue: items.reduce((sum, order) => sum + Number(order.total || 0), 0),
+      startingSoon: items.filter((order) => {
+        const timeUntilStart = new Date(order.scheduled_for).getTime() - Date.now();
+        return timeUntilStart > 0 && timeUntilStart <= 90 * 60 * 1000;
+      }).length,
+    }));
+  }, [scheduledOrders]);
 
   const exportOrdersCsv = () => {
     downloadCsv(
@@ -893,7 +954,7 @@ export default function Orders() {
       await navigator.clipboard.writeText(kanbanClosingText);
       toast.success("Fechamento do Kanban copiado.");
     } catch {
-      toast.error("Não rolou copiar o fechamento do Kanban.");
+      toast.error("Nao rolou copiar o fechamento do Kanban.");
     }
   };
 
@@ -930,7 +991,7 @@ export default function Orders() {
             />
           </div>
 
-          <Select value={orderTypeFilter} onValueChange={(value) => setOrderTypeFilter(value as any)}>
+          <Select value={orderTypeFilter} onValueChange={(value) => setOrderTypeFilter(value as "all" | "pickup" | "delivery")}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -1030,6 +1091,42 @@ export default function Orders() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Rotas ativas</p><p className="text-2xl font-bold">{summary.deliveriesInRoute}</p></CardContent></Card>
       </div>
 
+      {scheduledAgenda.length > 0 && (
+        <Card className="border-primary/15 bg-primary/5">
+          <CardHeader>
+            <CardTitle>Agenda visual dos agendados</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Leitura rápida para pré-produção: quanto entra em cada faixa e o que começa logo.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {scheduledAgenda.map((group) => (
+              <div key={group.label} className="rounded-xl border bg-background p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{group.label}</p>
+                    <p className="text-xs text-muted-foreground">{group.items.length} pedido(s)</p>
+                  </div>
+                  <Badge variant={group.startingSoon > 0 ? "secondary" : "outline"}>
+                    {group.startingSoon > 0 ? `${group.startingSoon} começando já` : "Sem urgência"}
+                  </Badge>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Volume previsto: <span className="font-medium text-foreground">{formatCurrency(group.revenue)}</span></p>
+                  <p>
+                    Tipos:{" "}
+                    <span className="font-medium text-foreground">
+                      {group.items.filter((item) => item.order_type === "delivery").length} entrega(s) /{" "}
+                      {group.items.filter((item) => item.order_type === "pickup").length} retirada(s)
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {scheduledOrders.length > 0 && (
         <Card>
           <CardHeader>
@@ -1098,7 +1195,20 @@ export default function Orders() {
 
       {driverFilteredOrders.length === 0 ? (
         <Card>
-          <CardContent className="py-14 text-center text-muted-foreground">Nenhum pedido encontrado com esses filtros.</CardContent>
+          <CardContent className="py-8">
+            <StateCard
+              title="Nenhum pedido encontrado com esses filtros"
+              description="Ajuste busca, status, tipo de pedido ou entregador para abrir a visão certa da operação."
+              actionLabel="Limpar filtros"
+              action={() => {
+                setSearchTerm("");
+                setOrderTypeFilter("all");
+                setPaymentMethodFilter("all");
+                setStatusFilter("all");
+                setDriverFilter("all");
+              }}
+            />
+          </CardContent>
         </Card>
       ) : (
         <div className="space-y-6">
@@ -1184,11 +1294,7 @@ export default function Orders() {
                                   variant="outline"
                                   className="h-8 text-xs"
                                   disabled={confirmPaymentMutation.isPending}
-                                  onClick={() => {
-                                    const ok = window.confirm("Confirmar pagamento deste pedido como aprovado?");
-                                    if (!ok) return;
-                                    confirmPaymentMutation.mutate(order.id);
-                                  }}
+                                  onClick={() => setConfirmPaymentOrderId(order.id)}
                                 >
                                   Confirmar pagamento
                                 </Button>
@@ -1464,9 +1570,60 @@ export default function Orders() {
           )}
         </div>
       )}
+      <HelpCenterCard
+        title="Ajuda rápida na operação"
+        description="Se pedido, despacho, pagamento ou SLA travar, resolve daqui sem apagar incêndio no escuro."
+        supportMessage="Oi! Preciso de ajuda no painel de pedidos do lojista."
+        topics={[
+          {
+            title: "Pedido travado",
+            description: "Revise status, histórico e pagamento para separar gargalo de operação e gargalo financeiro.",
+          },
+          {
+            title: "Despacho lento",
+            description: "Confira fila, entregadores ativos e prazo de redispatch antes de mexer manualmente no fluxo.",
+          },
+          {
+            title: "Pagamento pendente",
+            description: "Para PIX ou cartão, revalide a cobrança antes de marcar qualquer pedido como pago.",
+          },
+          {
+            title: "SLA estourando",
+            description: "Use os alertas do painel para agir cedo e proteger a experiência do cliente.",
+          },
+        ]}
+      />
+      <AlertDialog open={!!confirmPaymentOrderId} onOpenChange={(open) => !open && setConfirmPaymentOrderId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar pagamento manualmente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Use isso so quando a cobranca ja tiver sido conferida no financeiro. O pedido vai ser marcado como pago no painel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!confirmPaymentOrderId) return;
+                confirmPaymentMutation.mutate(confirmPaymentOrderId);
+                setConfirmPaymentOrderId(null);
+              }}
+            >
+              Confirmar pagamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

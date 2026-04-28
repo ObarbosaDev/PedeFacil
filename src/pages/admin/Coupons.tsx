@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, TicketPercent } from "lucide-react";
+import { Copy, Plus, Pencil, Trash2, TicketPercent } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { logAuditEvent } from "@/lib/observability";
 import { toast } from "sonner";
@@ -237,6 +237,33 @@ export default function Coupons() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Não rolou remover o cupom.");
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (coupon: Coupon) => {
+      const payload = {
+        establishment_id: establishment!.id,
+        code: `${coupon.code}-COPY`,
+        description: coupon.description || null,
+        discount_type: coupon.discount_type,
+        discount_value: coupon.discount_value,
+        minimum_order_value: coupon.minimum_order_value,
+        max_discount_value: coupon.max_discount_value,
+        usage_limit: coupon.usage_limit,
+        starts_at: coupon.starts_at,
+        expires_at: coupon.expires_at,
+        is_active: false,
+      };
+      const { error } = await (supabase as any).from("coupons").insert(payload);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["coupons"] });
+      toast.success("Cupom duplicado e deixado inativo para revisão.");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Não rolou duplicar o cupom.");
     },
   });
 
@@ -479,6 +506,10 @@ export default function Coupons() {
                   </div>
 
                   <div className="flex gap-2 pt-1">
+                    <Button variant="outline" size="sm" onClick={() => duplicateMutation.mutate(coupon)}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicar
+                    </Button>
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(coupon)}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Editar

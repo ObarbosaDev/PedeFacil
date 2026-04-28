@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import StatsCard from "@/components/dashboard/StatsCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import NotificationCenterCard from "@/components/dashboard/NotificationCenterCard";
+import OnboardingWelcomeDialog from "@/components/dashboard/OnboardingWelcomeDialog";
 import { ClipboardList, DollarSign, TrendingUp, ArrowRight, Sparkles, PackageCheck, CalendarDays, Trophy, CreditCard, Bike, WalletCards } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageLoader from "@/components/system/PageLoader";
 import StateCard from "@/components/system/StateCard";
+import HelpCenterCard from "@/components/system/HelpCenterCard";
 import { logClientError } from "@/lib/observability";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis } from "recharts";
+import OnboardingChecklistCard from "@/components/dashboard/OnboardingChecklistCard";
 
 const periodOptions = [
   { value: "7", label: "Últimos 7 dias" },
@@ -119,6 +123,54 @@ export default function Dashboard() {
         .select("product_name, quantity, unit_price, orders!inner(created_at, establishment_id, status)")
         .eq("orders.establishment_id", establishment!.id)
         .gte("orders.created_at", periodStartIso);
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: products = [] } = useQuery({
+    queryKey: ["dashboard-products", establishment?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("products")
+        .select("id, is_available")
+        .eq("establishment_id", establishment!.id);
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["dashboard-categories", establishment?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("establishment_id", establishment!.id);
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: coupons = [] } = useQuery({
+    queryKey: ["dashboard-coupons", establishment?.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("coupons")
+        .select("id, is_active")
+        .eq("establishment_id", establishment!.id);
+      return data || [];
+    },
+    enabled: !!establishment,
+  });
+
+  const { data: deliveryDrivers = [] } = useQuery({
+    queryKey: ["dashboard-drivers", establishment?.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("delivery_drivers")
+        .select("id, is_active")
+        .eq("establishment_id", establishment!.id);
       return data || [];
     },
     enabled: !!establishment,
@@ -238,6 +290,20 @@ export default function Dashboard() {
   );
   const todayRevenue = todayOrders.reduce((sum, order) => sum + Number(order.total), 0);
   const inProgress = orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length;
+  const hasStoreBasics = Boolean(
+    establishment?.name &&
+      establishment?.whatsapp &&
+      (String(establishment?.description || "").trim() ||
+        String(establishment?.address || "").trim() ||
+        String(establishment?.opening_hours || "").trim())
+  );
+  const hasCatalog = categories.length > 0 && products.length > 0;
+  const hasCoupons = coupons.some((coupon) => coupon.is_active !== false);
+  const hasDrivers = deliveryDrivers.some((driver) => driver.is_active !== false);
+  const hasOrders = orders.length > 0 || periodOrders.length > 0;
+  const activeDeliveriesCount = (periodDeliveries as any[]).filter((delivery) =>
+    ["assigned", "accepted", "picked_up"].includes(String(delivery.status || ""))
+  ).length;
 
   const analytics = useMemo(() => {
     const paidOrders = periodOrders.filter((order: any) => order.status !== "cancelled");
@@ -300,6 +366,16 @@ export default function Dashboard() {
       estimatedNet,
     };
   }, [establishment, periodDeliveries, periodOrders]);
+
+  const lateOrders = useMemo(
+    () =>
+      (periodOrders as any[]).filter((order) => {
+        const createdAt = new Date(order.created_at).getTime();
+        const ageMinutes = (Date.now() - createdAt) / 60000;
+        return !["delivered", "cancelled"].includes(String(order.status || "")) && ageMinutes > 45;
+      }),
+    [periodOrders]
+  );
 
   const funnel = useMemo(() => {
     const menuSessions = new Set<string>();
@@ -545,6 +621,47 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <OnboardingChecklistCard
+          hasStoreBasics={hasStoreBasics}
+          hasCatalog={hasCatalog}
+          hasOrders={hasOrders}
+          hasCoupons={hasCoupons}
+          hasDrivers={hasDrivers}
+        />
+        <div className="space-y-4">
+          <NotificationCenterCard
+            lateOrders={lateOrders.length}
+            pendingDigitalPayments={executiveFinance.digitalPendingOrders}
+            activeDeliveries={activeDeliveriesCount}
+            hasCatalog={hasCatalog}
+          />
+          <HelpCenterCard
+            supportMessage="Oi! Preciso de ajuda para destravar a operação do painel do lojista."
+            topics={[
+              {
+                title: "Loja sem pedidos",
+                description: "Revise cardápio, horários, links públicos e a jornada do checkout.",
+              },
+              {
+                title: "Pagamento não liberou",
+                description: "Use a revalidação do checkout e confira o status da assinatura ou do pedido.",
+              },
+              {
+                title: "Despacho travado",
+                description: "Cheque entregadores, operação marketplace e filtros do painel de pedidos.",
+              },
+              {
+                title: "Conta da loja",
+                description: "Dados básicos da loja bem preenchidos aceleram ativação, confiança e conversão.",
+              },
+            ]}
+          />
+        </div>
+      </section>
+
+      <OnboardingWelcomeDialog openWhenReady={Boolean(establishment?.id)} />
 
       {!establishment && (
         <Card className="border-primary/30 bg-primary/5">

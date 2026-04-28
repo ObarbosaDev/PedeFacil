@@ -24,11 +24,18 @@ const defaultSettings: SecuritySettings = {
   require_step_up_for_critical_actions: true,
 };
 
-function isMissingRelationError(error: any) {
+type SupabaseLikeError = {
+  message?: string;
+  details?: string;
+  code?: string;
+};
+
+function isMissingRelationError(error: unknown) {
   if (!error) return false;
-  const message = String(error.message || "").toLowerCase();
-  const details = String(error.details || "").toLowerCase();
-  const code = String(error.code || "").toLowerCase();
+  const typedError = error as SupabaseLikeError;
+  const message = String(typedError.message || "").toLowerCase();
+  const details = String(typedError.details || "").toLowerCase();
+  const code = String(typedError.code || "").toLowerCase();
   return (
     code === "42p01" ||
     message.includes("could not find the table") ||

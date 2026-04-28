@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { trackProductEvent } from "@/lib/product-analytics";
+import { plans } from "@/lib/plans";
 import {
   ArrowRight,
   BadgeCheck,
@@ -25,23 +26,23 @@ import {
 const featureBlocks = [
   {
     icon: MessageCircle,
-    title: "Pedido no WhatsApp sem bagunça",
-    desc: "Cliente pede, a loja recebe tudo organizado e responde rápido.",
+    title: "Pedido no WhatsApp sem bagunÃ§a",
+    desc: "Cliente pede, a loja recebe tudo organizado e responde rÃ¡pido.",
   },
   {
     icon: TicketPercent,
     title: "Cupons e campanhas de verdade",
-    desc: "Crie oferta por período, valor mínimo e regra de uso sem planilha.",
+    desc: "Crie oferta por perÃ­odo, valor mÃ­nimo e regra de uso sem planilha.",
   },
   {
     icon: BarChart3,
-    title: "Painel com leitura de operação",
-    desc: "Pedidos, volume do dia e gargalos da operação em uma leitura que bate o olho e resolve.",
+    title: "Painel com leitura de operaÃ§Ã£o",
+    desc: "Pedidos, volume do dia e gargalos da operaÃ§Ã£o em uma leitura que bate o olho e resolve.",
   },
   {
     icon: Bike,
     title: "Fluxo de entregador completo",
-    desc: "Despacho, aceite, saída para rota, PIN final e rastreio ao vivo.",
+    desc: "Despacho, aceite, saÃ­da para rota, PIN final e rastreio ao vivo.",
   },
 ];
 
@@ -49,7 +50,7 @@ const roadmap = [
   {
     step: "01",
     title: "Cliente monta o pedido",
-    desc: "Cardápio com visual forte, extras e checkout objetivo.",
+    desc: "CardÃ¡pio com visual forte, extras e checkout objetivo.",
   },
   {
     step: "02",
@@ -59,73 +60,59 @@ const roadmap = [
   {
     step: "03",
     title: "Entregador executa rota",
-    desc: "Ações rápidas de rua: mapa, ligação, ocorrência e PIN.",
+    desc: "AÃ§Ãµes rÃ¡pidas de rua: mapa, ligaÃ§Ã£o, ocorrÃªncia e PIN.",
   },
   {
     step: "04",
-    title: "Análise e escale",
-    desc: "Relatórios e automações para subir margem, ritmo e controle da operação.",
+    title: "AnÃ¡lise e escale",
+    desc: "RelatÃ³rios e automaÃ§Ãµes para subir margem, ritmo e controle da operaÃ§Ã£o.",
   },
 ];
 
-const pricingPlans = [
-  {
-    slug: "essencial",
-    name: "Essencial",
-    price: "R$ 79/mês",
-    highlight: "Entrada forte",
-    perks: ["Cardápio digital", "Pedidos no WhatsApp", "Painel em tempo real"],
-  },
-  {
-    slug: "profissional",
-    name: "Profissional",
-    price: "R$ 149/mês",
-    highlight: "Mais escolhido",
-    perks: ["Tudo do Essencial", "Cupons e campanhas", "Relatórios avançados"],
-    featured: true,
-  },
-  {
-    slug: "premium",
-    name: "Premium",
-    price: "R$ 249/mês",
-    highlight: "Escala e performance",
-    perks: ["Tudo do Profissional", "Suporte prioritário", "Acompanhamento consultivo"],
-  },
-];
+const pricingPlans = plans.map((plan) => ({
+  slug: plan.slug,
+  name: plan.name,
+  price: `R$ ${plan.monthly}/mês`,
+  highlight: plan.highlight,
+  pitch: plan.shortPitch,
+  audience: plan.audience,
+  perks: plan.perks.slice(0, 3),
+  featured: !!plan.featured,
+}));
 const personaModes = [
   {
     id: "lojista",
     label: "Modo lojista",
-    title: "Comando total da operação em uma tela viva.",
-    desc: "Kanban, automações, cupons, entregadores e análise de performance em tempo real.",
-    bullets: ["Despacho inteligente", "Automação WhatsApp", "Relatórios de repasse"],
+    title: "Comando total da operaÃ§Ã£o em uma tela viva.",
+    desc: "Kanban, automaÃ§Ãµes, cupons, entregadores e anÃ¡lise de performance em tempo real.",
+    bullets: ["Despacho inteligente", "AutomaÃ§Ã£o WhatsApp", "RelatÃ³rios de repasse"],
     icon: Store,
   },
   {
     id: "cliente",
     label: "Modo cliente",
-    title: "Compra rápida, visual premium e fluxo sem fricção.",
-    desc: "Cardápio bonito, checkout seguro, conta personalizada e recompra sem enrolação.",
-    bullets: ["Checkout organizado", "Cupons aplicados", "Histórico e favoritos"],
+    title: "Compra rÃ¡pida, visual premium e fluxo sem fricÃ§Ã£o.",
+    desc: "CardÃ¡pio bonito, checkout seguro, conta personalizada e recompra sem enrolaÃ§Ã£o.",
+    bullets: ["Checkout organizado", "Cupons aplicados", "HistÃ³rico e favoritos"],
     icon: User,
   },
   {
     id: "entregador",
     label: "Modo entregador",
-    title: "Painel de rua com ações práticas de verdade.",
-    desc: "Aceite, rota, ocorrência, rastreio e PIN final para fechar a corrida do jeito certo.",
-    bullets: ["Google Maps e Waze", "Registro de ocorrência", "Confirmação por PIN"],
+    title: "Painel de rua com aÃ§Ãµes prÃ¡ticas de verdade.",
+    desc: "Aceite, rota, ocorrÃªncia, rastreio e PIN final para fechar a corrida do jeito certo.",
+    bullets: ["Google Maps e Waze", "Registro de ocorrÃªncia", "ConfirmaÃ§Ã£o por PIN"],
     icon: Truck,
   },
 ];
 
 const marqueeItems = [
-  "Checkout com conta obrigatória",
-  "Cupons por regra de negócio",
-  "Rastreamento público da entrega",
+  "Checkout com conta obrigatÃ³ria",
+  "Cupons por regra de negÃ³cio",
+  "Rastreamento pÃºblico da entrega",
   "Painel de entregador robusto",
-  "Operação com SLA monitorado",
-  "Automação de mensagens",
+  "OperaÃ§Ã£o com SLA monitorado",
+  "AutomaÃ§Ã£o de mensagens",
   "Design premium em todos os perfis",
 ];
 function BrandOrbit() {
@@ -161,7 +148,7 @@ function BrandOrbit() {
         <text x="448" y="214">cliente</text>
         <text x="256" y="351">entregador</text>
         <text x="156" y="154">lojista</text>
-        <text x="362" y="100">automação</text>
+        <text x="362" y="100">automaÃ§Ã£o</text>
       </g>
 
       <rect x="34" y="34" width="182" height="96" rx="14" fill="#111827" stroke="#374151" />
@@ -170,7 +157,7 @@ function BrandOrbit() {
       <text x="132" y="98" fill="#22c55e" fontSize="12">+12%</text>
 
       <rect x="364" y="304" width="182" height="82" rx="14" fill="#111827" stroke="#374151" />
-      <text x="378" y="332" fill="#f8fafc" fontSize="12">SLA médio</text>
+      <text x="378" y="332" fill="#f8fafc" fontSize="12">SLA mÃ©dio</text>
       <text x="378" y="365" fill="#fff" fontSize="26" fontWeight="700">22 min</text>
     </svg>
   );
@@ -252,10 +239,10 @@ export default function LandingPage() {
       `}</style>
 
       <a
-        href="#conteúdo-principal"
+        href="#conteÃºdo-principal"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-zinc-900 focus:text-zinc-100 focus:px-4 focus:py-2 focus:rounded-md"
       >
-        Ir para o conteúdo principal
+        Ir para o conteÃºdo principal
       </a>
 
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
@@ -267,8 +254,8 @@ export default function LandingPage() {
 
       <nav className="sticky top-0 z-50 border-b border-zinc-200/70 bg-[#f6f4ef]/88 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-          <Link to="/" className="inline-flex items-center reveal d1" aria-label="Voltar para a página inicial">
-            <img src="/logo.png" alt="Logo Pede Fácil" className="h-10 w-auto object-contain" />
+          <Link to="/" className="inline-flex items-center reveal d1" aria-label="Voltar para a pÃ¡gina inicial">
+            <img src="/logo.png" alt="Logo Pede FÃ¡cil" className="h-10 w-auto object-contain" />
           </Link>
 
           <div className="flex items-center gap-2 flex-wrap justify-end reveal d2">
@@ -290,14 +277,14 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <main id="conteúdo-principal" className="max-w-7xl mx-auto px-4 pt-12 pb-12">
+      <main id="conteÃºdo-principal" className="max-w-7xl mx-auto px-4 pt-12 pb-12">
         <section className="grid xl:grid-cols-[1.07fr_0.93fr] gap-8 xl:gap-10 items-stretch">
           <div className="rounded-3xl border border-zinc-200 bg-white/90 backdrop-blur p-6 sm:p-8 md:p-10 shadow-[0_30px_120px_-60px_rgba(0,0,0,0.5)] reveal d1 relative overflow-hidden">
             <div className="absolute -right-14 -top-14 h-52 w-52 rounded-full bg-orange-200/45 blur-3xl pointer-events-none" />
             <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-emerald-200/35 blur-3xl pointer-events-none" />
             <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-semibold tracking-wide text-zinc-700">
               <Sparkles className="h-3.5 w-3.5 text-orange-500" />
-              Plataforma para quem quer operar no nível profissional
+              Plataforma para quem quer operar no nÃ­vel profissional
             </div>
 
             <h1 className="mt-4 text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.02] tracking-tight text-[color:var(--ink)]">
@@ -305,7 +292,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-5 text-zinc-600 text-base sm:text-lg max-w-2xl">
-              Loja, cliente e entregador em um ecossistema único. Bonito, rápido e feito para escalar com consistência.
+              Loja, cliente e entregador em um ecossistema Ãºnico. Bonito, rÃ¡pido e feito para escalar com consistÃªncia.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -344,8 +331,8 @@ export default function LandingPage() {
                 <p className="text-xl font-black mt-1">Rastreio + PIN</p>
               </div>
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 reveal d4">
-                <p className="text-xs text-zinc-500">Segurança</p>
-                <p className="text-xl font-black mt-1">Conta obrigatória</p>
+                <p className="text-xs text-zinc-500">SeguranÃ§a</p>
+                <p className="text-xl font-black mt-1">Conta obrigatÃ³ria</p>
               </div>
             </div>
           </div>
@@ -353,15 +340,15 @@ export default function LandingPage() {
           <div className="space-y-4 reveal d2">
             <div className="rounded-3xl p-5 md:p-6 border border-zinc-200 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 text-zinc-100 shadow-[0_24px_90px_-60px_rgba(0,0,0,0.8)] relative overflow-hidden">
               <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-orange-400/20 blur-3xl pointer-events-none" />
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-300">Identidade visual proprietária</p>
-              <h2 className="text-2xl font-black mt-2">Ecossistema da operação em um olhar</h2>
+              <p className="text-xs uppercase tracking-[0.2em] text-zinc-300">Identidade visual proprietÃ¡ria</p>
+              <h2 className="text-2xl font-black mt-2">Ecossistema da operaÃ§Ã£o em um olhar</h2>
               <div className="mt-4 rounded-2xl border border-zinc-700 bg-zinc-900/50 p-2">
                 <BrandOrbit />
               </div>
             </div>
 
             <div className="rounded-3xl border border-zinc-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Acessos rápidos</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Acessos rÃ¡pidos</p>
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Link to="/cliente" className="block rounded-2xl border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 hover:border-zinc-300 hover:-translate-y-0.5 transition-all">
                   <User className="h-5 w-5 text-zinc-700" />
@@ -371,7 +358,7 @@ export default function LandingPage() {
                 <Link to="/login" className="block rounded-2xl border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 hover:border-zinc-300 hover:-translate-y-0.5 transition-all">
                   <Store className="h-5 w-5 text-zinc-700" />
                   <p className="font-semibold mt-2">Lojista</p>
-                  <p className="text-xs text-zinc-500 mt-1">Gerir cardápio e operação.</p>
+                  <p className="text-xs text-zinc-500 mt-1">Gerir cardÃ¡pio e operaÃ§Ã£o.</p>
                 </Link>
                 <Link to="/entregador/login" className="block rounded-2xl border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 hover:border-zinc-300 hover:-translate-y-0.5 transition-all">
                   <Bike className="h-5 w-5 text-zinc-700" />
@@ -404,8 +391,8 @@ export default function LandingPage() {
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 md:p-8 reveal d2">
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm text-zinc-500">Experiência por perfil</p>
-              <h2 className="text-3xl md:text-4xl font-black mt-1">Um produto, três jornadas lapidadas</h2>
+              <p className="text-sm text-zinc-500">ExperiÃªncia por perfil</p>
+              <h2 className="text-3xl md:text-4xl font-black mt-1">Um produto, trÃªs jornadas lapidadas</h2>
             </div>
           </div>
 
@@ -512,7 +499,7 @@ export default function LandingPage() {
             <WandSparkles className="h-4 w-4 text-orange-600" />
             Jornada completa da plataforma
           </div>
-          <h2 className="text-3xl md:text-4xl font-black mt-2">Um fluxo único para vender, entregar e fidelizar</h2>
+          <h2 className="text-3xl md:text-4xl font-black mt-2">Um fluxo Ãºnico para vender, entregar e fidelizar</h2>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((item, idx) => (
@@ -531,7 +518,7 @@ export default function LandingPage() {
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm text-zinc-500">Posicionamento de produto</p>
-              <h2 className="text-3xl md:text-4xl font-black mt-1">Não é só sistema. É vantagem competitiva.</h2>
+              <h2 className="text-3xl md:text-4xl font-black mt-1">NÃ£o Ã© sÃ³ sistema. Ã‰ vantagem competitiva.</h2>
             </div>
           </div>
 
@@ -539,31 +526,31 @@ export default function LandingPage() {
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="text-left border-b border-zinc-200">
-                  <th className="py-3 pr-4 font-semibold text-zinc-600">Critério</th>
-                  <th className="py-3 px-4 font-semibold text-zinc-900">PedeFácil</th>
-                  <th className="py-3 px-4 font-semibold text-zinc-500">Solução genérica</th>
+                  <th className="py-3 pr-4 font-semibold text-zinc-600">CritÃ©rio</th>
+                  <th className="py-3 px-4 font-semibold text-zinc-900">PedeFÃ¡cil</th>
+                  <th className="py-3 px-4 font-semibold text-zinc-500">SoluÃ§Ã£o genÃ©rica</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-zinc-100">
-                  <td className="py-3 pr-4">Experiência por perfil</td>
+                  <td className="py-3 pr-4">ExperiÃªncia por perfil</td>
                   <td className="py-3 px-4 text-emerald-700 font-medium">Cliente, lojista e entregador com fluxos dedicados</td>
                   <td className="py-3 px-4 text-zinc-500">Uma tela igual para todo mundo</td>
                 </tr>
                 <tr className="border-b border-zinc-100">
-                  <td className="py-3 pr-4">Operação de entrega</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Despacho, aceite, ocorrência, rastreio e PIN</td>
+                  <td className="py-3 pr-4">OperaÃ§Ã£o de entrega</td>
+                  <td className="py-3 px-4 text-emerald-700 font-medium">Despacho, aceite, ocorrÃªncia, rastreio e PIN</td>
                   <td className="py-3 px-4 text-zinc-500">Controle parcial e manual</td>
                 </tr>
                 <tr className="border-b border-zinc-100">
-                  <td className="py-3 pr-4">Automação comercial</td>
+                  <td className="py-3 pr-4">AutomaÃ§Ã£o comercial</td>
                   <td className="py-3 px-4 text-emerald-700 font-medium">Eventos WhatsApp por etapa da jornada</td>
                   <td className="py-3 px-4 text-zinc-500">Mensagens sem contexto</td>
                 </tr>
                 <tr>
-                  <td className="py-3 pr-4">Visual e percepção de marca</td>
+                  <td className="py-3 pr-4">Visual e percepÃ§Ã£o de marca</td>
                   <td className="py-3 px-4 text-emerald-700 font-medium">Interface premium com linguagem consistente</td>
-                  <td className="py-3 px-4 text-zinc-500">Layout padrão sem identidade</td>
+                  <td className="py-3 px-4 text-zinc-500">Layout padrÃ£o sem identidade</td>
                 </tr>
               </tbody>
             </table>
@@ -576,14 +563,14 @@ export default function LandingPage() {
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm text-zinc-500">Planos e valores</p>
-              <h2 className="text-3xl md:text-4xl font-black mt-1">Cliente compra grátis. Comerciante assina plano.</h2>
+              <h2 className="text-3xl md:text-4xl font-black mt-1">Preço mais atrativo para entrar. Estrutura forte para continuar.</h2>
               <p className="text-zinc-600 mt-2 max-w-2xl">
-                O acesso do cliente e do entregador existe para fazer a operação fluir. Plano pago é para lojista.
+                Cliente e entregador usam o ecossistema para a operação fluir. Quem assina é o lojista, com 30 dias grátis para validar de verdade.
               </p>
             </div>
             <span className="inline-flex items-center gap-1 text-xs font-semibold rounded-full px-3 py-2 border border-zinc-300 text-zinc-700">
               <Clock3 className="h-3.5 w-3.5" />
-              Ativação rápida
+              Ativação rápida e trial de 30 dias
             </span>
           </div>
 
@@ -601,18 +588,18 @@ export default function LandingPage() {
                   <p className={`text-xs uppercase tracking-wider ${plan.featured ? "text-zinc-300" : "text-zinc-500"}`}>
                     {plan.highlight}
                   </p>
-                  {plan.featured && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-1 bg-zinc-100 text-zinc-900">
-                      <Crown className="h-3.5 w-3.5" />
-                      Destaque
-                    </span>
-                  )}
+                  <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-1 ${plan.featured ? "bg-zinc-100 text-zinc-900" : "bg-orange-100 text-orange-700"}`}>
+                    {plan.featured ? <Crown className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {plan.featured ? "Mais pedido" : "30 dias grátis"}
+                  </span>
                 </div>
 
                 <h3 className="text-2xl font-black mt-2">{plan.name}</h3>
                 <p className={`text-3xl font-black mt-4 ${plan.featured ? "text-orange-300" : "text-zinc-900"}`}>
                   {plan.price}
                 </p>
+                <p className={`text-sm mt-2 ${plan.featured ? "text-zinc-300" : "text-zinc-600"}`}>{plan.pitch}</p>
+                <p className={`text-xs mt-2 ${plan.featured ? "text-zinc-400" : "text-zinc-500"}`}>{plan.audience}</p>
 
                 <div className="space-y-2 mt-5">
                   {plan.perks.map((perk) => (
@@ -651,12 +638,12 @@ export default function LandingPage() {
         <div className="rounded-3xl border border-zinc-200 bg-zinc-900 text-zinc-100 p-8 md:p-12 text-center relative overflow-hidden reveal d4">
           <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-56 w-56 rounded-full bg-orange-400/20 blur-3xl pointer-events-none" />
           <div className="absolute inset-0 opacity-[0.16] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.25)_1px,transparent_0)] [background-size:18px_18px]" />
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-300 relative">Produto para negócio sério</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-300 relative">Produto para negÃ³cio sÃ©rio</p>
           <h2 className="text-3xl md:text-5xl font-black mt-3 relative">
-            Sua operação de delivery com nível de empresa grande.
+            Sua operaÃ§Ã£o de delivery com nÃ­vel de empresa grande.
           </h2>
           <p className="text-zinc-300 text-lg mt-4 max-w-2xl mx-auto relative">
-            Se a meta é crescer com consistência, esse ecossistema foi desenhado para aguentar escala.
+            Se a meta Ã© crescer com consistÃªncia, esse ecossistema foi desenhado para aguentar escala.
           </p>
 
           <div className="flex items-center justify-center gap-3 flex-wrap mt-8 relative">
@@ -689,11 +676,15 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-zinc-200 py-8 text-center text-sm text-zinc-500">
-        <p>© {new Date().getFullYear()} PedeFácil. Todos os direitos reservados.</p>
+        <p>Â© {new Date().getFullYear()} PedeFÃ¡cil. Todos os direitos reservados.</p>
       </footer>
     </div>
   );
 }
+
+
+
+
 
 
 

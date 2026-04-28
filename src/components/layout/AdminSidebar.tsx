@@ -17,13 +17,14 @@ import {
   ReceiptText,
   Headset,
   Rocket,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { PlanFeature, PlanSlug, getRequiredPlanForFeature, hasPlanFeature, planLabel } from "@/lib/plan-access";
 import { featureFlags } from "@/lib/feature-flags";
 
-const navItems: { label: string; icon: any; path: string; feature: PlanFeature; enabled?: boolean }[] = [
+const navItems: { label: string; icon: LucideIcon; path: string; feature: PlanFeature; enabled?: boolean }[] = [
   { label: "Resumo", icon: LayoutDashboard, path: "/admin", feature: "dashboard" },
   { label: "Pedidos", icon: ClipboardList, path: "/admin/pedidos", feature: "orders" },
   { label: "Cardápio", icon: ShoppingBag, path: "/admin/produtos", feature: "products" },

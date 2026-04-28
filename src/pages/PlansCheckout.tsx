@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BadgeCheck, Check, CreditCard, ExternalLink, Lock, LogIn, QrCode, ShieldCheck } from "lucide-react";
@@ -82,9 +82,9 @@ export default function PlansCheckout() {
     if (paymentReturn === "success") {
       toast.success("Pagamento recebido. Estamos validando e liberando seu acesso.");
     } else if (paymentReturn === "pending") {
-      toast.info("Pagamento em análise. A gente atualiza o status automático por aqui.");
+      toast.info("Pagamento em anÃ¡lise. A gente atualiza o status automÃ¡tico por aqui.");
     } else if (paymentReturn === "failure") {
-      toast.error("O pagamento não foi concluído. Você pode tentar de novo.");
+      toast.error("O pagamento nÃ£o foi concluÃ­do. VocÃª pode tentar de novo.");
     }
   }, [searchParams]);
 
@@ -118,7 +118,7 @@ export default function PlansCheckout() {
   const startCheckoutMutation = useMutation({
     onMutate: () => setPaymentError(null),
     mutationFn: async () => {
-      if (!user) throw new Error("Faça login para gerar seu checkout.");
+      if (!user) throw new Error("FaÃ§a login para gerar seu checkout.");
       await enforceActionRateLimit("plans_start_checkout", 8, 300);
       const checkoutSession = await startPlanCheckout({
         planSlug: plan.slug,
@@ -149,19 +149,19 @@ export default function PlansCheckout() {
       });
 
       if (payment.already_active || checkoutSession.status === "active") {
-        toast.success("Sua assinatura já está ativa. Painel liberado.");
+        toast.success("Sua assinatura jÃ¡ estÃ¡ ativa. Painel liberado.");
         return;
       }
 
       if (!payment.checkout_url) {
-        throw new Error("A cobrança foi criada, mas o link de pagamento não voltou.");
+        throw new Error("A cobranÃ§a foi criada, mas o link de pagamento nÃ£o voltou.");
       }
 
-      toast.success("Bora fechar isso com segurança no Mercado Pago. Redirecionando...");
+      toast.success("Bora fechar isso com seguranÃ§a no Mercado Pago. Redirecionando...");
       window.location.href = payment.checkout_url;
     },
     onError: (error: any) => {
-      const message = error?.message || "Não rolou iniciar seu pagamento agora.";
+      const message = error?.message || "NÃ£o rolou iniciar seu pagamento agora.";
       setPaymentError(message);
       toast.error(message);
     },
@@ -190,7 +190,7 @@ export default function PlansCheckout() {
   const revalidateMutation = useMutation({
     onMutate: () => setPaymentError(null),
     mutationFn: async () => {
-      if (!checkout?.checkout_session_id) throw new Error("Gere uma cobrança antes de revalidar.");
+      if (!checkout?.checkout_session_id) throw new Error("Gere uma cobranÃ§a antes de revalidar.");
       await enforceActionRateLimit("plans_revalidate_payment", 10, 300);
       return revalidateExternalPlanPayment({
         checkoutSessionId: checkout.checkout_session_id,
@@ -203,11 +203,11 @@ export default function PlansCheckout() {
       if (result.revalidated) {
         toast.success("Pagamento revalidado com sucesso.");
       } else {
-        toast.info("Revalidação feita. O status ainda está pendente.");
+        toast.info("RevalidaÃ§Ã£o feita. O status ainda estÃ¡ pendente.");
       }
     },
     onError: (error: any) => {
-      const message = error?.message || "Não rolou revalidar o pagamento agora.";
+      const message = error?.message || "NÃ£o rolou revalidar o pagamento agora.";
       setPaymentError(message);
       toast.error(message);
     },
@@ -226,7 +226,7 @@ export default function PlansCheckout() {
       <a
         href="#conteudo-principal-planos-checkout"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-zinc-900 focus:text-zinc-100 focus:px-4 focus:py-2 focus:rounded-md"
-      >Ir para o conteúdo principal</a>
+      >Ir para o conteÃºdo principal</a>
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
         <div className="absolute -top-24 -left-24 h-[26rem] w-[26rem] rounded-full bg-orange-300/25 blur-3xl" />
         <div className="absolute -bottom-24 right-0 h-[26rem] w-[26rem] rounded-full bg-emerald-300/20 blur-3xl" />
@@ -259,9 +259,9 @@ export default function PlansCheckout() {
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pagamento da assinatura</p>
               <h1 className="text-3xl md:text-4xl font-black mt-2">
-                Libere o plano <span className="text-orange-600">{plan.name}</span> e ative seu painel.
+                Comece no <span className="text-orange-600">{plan.name}</span> e libera seu painel sem travar a entrada.
               </h1>
-              <p className="text-zinc-600 mt-2">Conta criada + pagamento aprovado = acesso liberado automaticamente.</p>
+              <p className="text-zinc-600 mt-2">Conta criada, teste ativado ou pagamento aprovado: o acesso é liberado automaticamente.</p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 min-w-[240px]">
@@ -269,7 +269,7 @@ export default function PlansCheckout() {
               <p className="font-semibold mt-1">{subscription?.status ? statusLabel[subscription.status] : "Sem assinatura"}</p>
               {subscription?.current_period_end ? (
                 <p className="text-xs text-zinc-600 mt-1">
-                  Vigência até {new Date(subscription.current_period_end).toLocaleDateString("pt-BR")}
+                  VigÃªncia atÃ© {new Date(subscription.current_period_end).toLocaleDateString("pt-BR")}
                 </p>
               ) : null}
             </div>
@@ -281,7 +281,7 @@ export default function PlansCheckout() {
             <CardHeader>
               <CardTitle>Primeiro passo: entrar na conta do lojista</CardTitle>
               <CardDescription>
-                Por segurança, o checkout só é gerado para conta autenticada.
+                Por seguranÃ§a, o checkout sÃ³ Ã© gerado para conta autenticada.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -301,8 +301,8 @@ export default function PlansCheckout() {
         <section className="grid grid-cols-1 lg:grid-cols-[0.58fr_0.42fr] gap-4">
           <Card className="border-zinc-200 bg-white shadow-[0_24px_80px_-55px_rgba(0,0,0,0.45)]">
             <CardHeader>
-              <CardTitle>Pagamento real com Mercado Pago</CardTitle>
-              <CardDescription>Clique para gerar sua cobrança e finalizar em ambiente seguro com PIX ou cartão.</CardDescription>
+              <CardTitle>Fechamento seguro e sem atrito</CardTitle>
+              <CardDescription>Escolha o plano, gere a cobrança e finalize em ambiente seguro com PIX ou cartão.</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
@@ -340,7 +340,7 @@ export default function PlansCheckout() {
                     <QrCode className="h-4 w-4" />
                     PIX
                   </span>
-                  <p className={`text-xs mt-1 ${paymentMethod === "pix" ? "text-zinc-300" : "text-zinc-500"}`}>Pagamento instantâneo</p>
+                  <p className={`text-xs mt-1 ${paymentMethod === "pix" ? "text-zinc-300" : "text-zinc-500"}`}>Pagamento instantÃ¢neo</p>
                 </button>
 
                 <button
@@ -354,18 +354,18 @@ export default function PlansCheckout() {
                 >
                   <span className="inline-flex items-center gap-2 font-semibold">
                     <CreditCard className="h-4 w-4" />
-                    Cartão
+                    CartÃ£o
                   </span>
-                  <p className={`text-xs mt-1 ${paymentMethod === "card" ? "text-zinc-300" : "text-zinc-500"}`}>Crédito e débito</p>
+                  <p className={`text-xs mt-1 ${paymentMethod === "card" ? "text-zinc-300" : "text-zinc-500"}`}>CrÃ©dito e dÃ©bito</p>
                 </button>
               </div>
 
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
-                <p className="font-semibold">Fechamento 100% seguro</p>
-                <p className="text-sm text-zinc-600">Depois da aprovação, o sistema atualiza a assinatura e libera o painel automaticamente.</p>
+                <p className="font-semibold">Fechamento seguro e objetivo</p>
+                <p className="text-sm text-zinc-600">Depois da aprovação, o sistema atualiza a assinatura e libera o painel sozinho.</p>
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => startCheckoutMutation.mutate()} disabled={!user || startCheckoutMutation.isPending || loadingSubscription || isActive}>
-                    {startCheckoutMutation.isPending ? "Gerando e redirecionando..." : "Pagar com Mercado Pago"}
+                    {startCheckoutMutation.isPending ? "Gerando e redirecionando..." : "Gerar pagamento agora"}
                     <ExternalLink className="h-4 w-4 ml-2" />
                   </Button>
                   <Button
@@ -383,12 +383,12 @@ export default function PlansCheckout() {
                     }}
                     disabled={!user}
                   >
-                    Atualizar status
+                    Atualizar liberação
                   </Button>
                 </div>
 
                 <div className="space-y-2 pt-2 border-t">
-                  <p className="text-xs text-zinc-500">Se o pagamento aprovou e ainda não liberou, cole o ID e revalide.</p>
+                  <p className="text-xs text-zinc-500">Se o pagamento aprovou e ainda nÃ£o liberou, cole o ID e revalide.</p>
                   <input
                     value={paymentId}
                     onChange={(event) => setPaymentId(event.target.value)}
@@ -402,7 +402,7 @@ export default function PlansCheckout() {
 
                 {paymentError ? (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
-                    <p className="text-sm font-semibold text-red-700">Não foi possível concluir agora</p>
+                    <p className="text-sm font-semibold text-red-700">NÃ£o foi possÃ­vel concluir agora</p>
                     <p className="text-sm text-red-700">{paymentError}</p>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" onClick={() => startCheckoutMutation.mutate()} disabled={startCheckoutMutation.isPending || !user}>
@@ -420,15 +420,20 @@ export default function PlansCheckout() {
 
           <Card className="border-zinc-200 bg-white h-fit shadow-[0_24px_80px_-55px_rgba(0,0,0,0.45)]">
             <CardHeader>
-              <CardTitle>Resumo da assinatura</CardTitle>
+              <CardTitle>Resumo comercial</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                <p className="text-xs text-orange-700">Melhor encaixe</p>
+                <p className="font-semibold text-orange-950">{plan.audience}</p>
+                <p className="text-xs text-orange-800/80 mt-1">{plan.volumeHint}</p>
+              </div>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                 <p className="text-xs text-zinc-500">Plano</p>
                 <p className="font-semibold">{plan.name}</p>
               </div>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">Cobrança</p>
+                <p className="text-xs text-zinc-500">CobranÃ§a</p>
                 <p className="font-semibold">{billingMode === "yearly" ? "Anual (com economia)" : "Mensal"}</p>
               </div>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
@@ -436,6 +441,13 @@ export default function PlansCheckout() {
                 <p className="text-2xl font-black">
                   {formatPrice(effectivePrice)}<span className="text-sm font-medium">/mês</span>
                 </p>
+                {billingMode === "yearly" ? (
+                  <p className="text-xs text-emerald-700 mt-1">
+                    Economia anual de {formatPrice((plan.monthly - plan.yearly) * 12)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-zinc-500 mt-1">30 dias grátis antes da cobrança real.</p>
+                )}
               </div>
               {checkout?.checkout_session_id ? (
                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
@@ -443,6 +455,10 @@ export default function PlansCheckout() {
                   <p className="text-xs break-all font-semibold mt-1">{checkout.checkout_session_id}</p>
                 </div>
               ) : null}
+
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                {plan.setupPromise}
+              </div>
 
               <div className="pt-1">
                 <p className="text-xs text-zinc-500">Incluso no plano</p>
@@ -460,7 +476,7 @@ export default function PlansCheckout() {
                 Pagamento aprovado libera automaticamente o acesso ao painel do lojista.
               </div>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
-                Quer testar antes de pagar? Ative o teste gratis de 30 dias e use o painel completo agora.
+                Quer sentir antes de pagar? Ative o teste grátis de 30 dias e use o painel completo agora.
               </div>
 
               {isActive ? (
@@ -484,3 +500,4 @@ export default function PlansCheckout() {
     </div>
   );
 }
+
