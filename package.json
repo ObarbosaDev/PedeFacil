@@ -22,6 +22,7 @@
     "load:smoke": "node scripts/load-smoke.mjs",
     "load:orders-panel": "node scripts/orders-panel-load.mjs",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {

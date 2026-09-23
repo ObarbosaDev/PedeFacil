@@ -1,3 +1,12 @@
+/**
+ * Módulo: configuração de testes end-to-end.
+ * Data: 2026-09-23.
+ * Responsável: Engenharia Pede Fácil.
+ * Tela/fluxo: jornadas públicas e operacionais no navegador.
+ * Finalidade: executar testes contra o bundle de produção local.
+ * Motivo: validar o comportamento que será efetivamente hospedado.
+ * Evolução: separar projetos desktop, mobile e smoke de produção.
+ */
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
@@ -7,8 +16,14 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://127.0.0.1:4173",
     trace: "on-first-retry",
+  },
+  webServer: {
+    command: "npm run preview -- --host 127.0.0.1 --port 4173",
+    url: "http://127.0.0.1:4173",
+    reuseExistingServer: true,
+    timeout: 30_000,
   },
   projects: [
     {
