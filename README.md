@@ -79,7 +79,7 @@ Esta tabela é um **contrato alvo**, não uma afirmação de que todas as rotas 
 Pré-requisitos: Node.js 18+, npm, Java 11+ e Maven 3.9+. A API própria precisa de PostgreSQL para executar as migrações; a suíte Java usa H2 em testes de contexto. A configuração de produção na DigitalOcean ainda está sendo preparada.
 
 1. Execute `npm install`.
-2. Copie `backend/.env.example` para `backend/.env` e configure o PostgreSQL local.
+2. Configure o PostgreSQL e os segredos da API apenas na sua máquina, fora do Git.
 3. Inicie a API com `npm run backend:dev`.
 4. Em outro terminal, inicie a web com `npm run dev`.
 
