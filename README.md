@@ -1,450 +1,106 @@
-﻿# Pede Fácil
+# Pede Fácil
 
-Plataforma de pedidos para negócios locais venderem online com experiência premium para **cliente**, **lojista** e **entregador**, com operação centralizada, segurança reforçada e automações via WhatsApp.
+**Seu canal próprio de pedidos. Uma operação clara. Clientes que voltam.**
 
-## Visão do Produto
+O Pede Fácil está sendo reconstruído para ajudar restaurantes independentes a vender diretamente pelo próprio link, receber pedidos organizados e manter o relacionamento com cada cliente. O foco inicial são pizzarias, hamburguerias, açaíterias e restaurantes com delivery que já vendem por WhatsApp, Instagram ou marketplace e processam de 20 a 150 pedidos por dia.
 
-O Pede Fácil foi desenhado para profissionalizar a operação de delivery e retirada de pequenos e médios comércios sem complicar o dia a dia.
+> **Estado do projeto:** reconstrução do MVP. Este repositório ainda contém código legado do protótipo. Não há dados reais a migrar. Recursos descritos como objetivo abaixo não devem ser interpretados como prontos para operar com pagamentos reais.
 
-O sistema conecta três jornadas principais:
+## O produto em uma venda
 
-- Cliente: descobre lojas, monta pedido, aplica cupom, finaliza com conta segura e acompanha a entrega.
-- Lojista: gerencia cardápio, pedidos em Kanban, entregadores, cupons, automações e configurações de operação.
-- Entregador: recebe corridas, atualiza status, reporta ocorrências e confirma entrega com PIN.
+1. O lojista publica a loja e compartilha seu link ou QR Code.
+2. O cliente abre o cardápio, monta o carrinho e compra sem criar senha.
+3. O pedido chega à loja, o pagamento é confirmado e a equipe prepara.
+4. A loja entrega ou libera a retirada; o cliente acompanha e pode pedir novamente.
 
-## Proposta de Valor
+O Pede Fácil vende quatro resultados: **canal próprio de pedidos**, **operação organizada**, **relacionamento direto com o cliente** e **recorrência de vendas**. A experiência começa no link da loja; não é um catálogo público de restaurantes.
 
-- Aumentar conversão com cardápio e checkout modernos.
-- Reduzir atrito operacional com painel único de gestão.
-- Dar previsibilidade logística com fluxo de entregas e acompanhamento em tempo real.
-- Elevar segurança de acesso com múltiplas camadas de proteção.
+### Para o lojista
 
-## Perfis e Módulos
+- Publicar loja, horários, áreas de entrega, categorias, produtos e adicionais.
+- Receber pedidos, confirmar, informar previsão e acompanhar a preparação.
+- Organizar retirada e entregas com entregadores próprios ou convidados.
+- Consultar clientes, histórico, cupons e indicadores essenciais.
 
-### Cliente
+### Para o cliente
 
-- Conta obrigatória para compra (mais segurança para o comércio).
-- Login/cadastro com recuperação de senha.
-- Painel com lojas, favoritos, histórico, endereços e recompra.
-- Checkout com validações para entrega e retirada.
-- Aplicação de cupons.
+- Abrir o cardápio sem login e comprar por Pix ou cartão sem criar senha.
+- Escolher entrega ou retirada, acompanhar o pedido por link e repetir uma compra.
+- Criar uma conta opcional após o pedido.
 
-### Lojista
+### Para a entrega
 
-- Dashboard operacional.
-- Pedidos em fluxo Kanban.
-- Produtos, categorias e configurações da loja.
-- Gestão de cupons e fidelidade.
-- Gestão de entregadores e despacho.
-- Configuração de automações WhatsApp.
+- Aceitar uma corrida atribuída pela loja, navegar até os endereços e atualizar o status.
+- Confirmar a entrega por PIN e registrar uma ocorrência simples.
 
-### Entregador
+## Limites do MVP
 
-- Login e painel de corridas.
-- Atualização de status da entrega.
-- Acesso rápido a rota e contato.
-- Registro de ocorrências.
-- Confirmação de entrega com código/PIN.
+O produto inicial atende **uma loja por operação**, com frota própria ou convidada. Marketplace de restaurantes, distribuição pública de corridas, carteira de entregadores, cashback, ranking, múltiplos gateways e aplicativo nativo estão fora do MVP. O código legado dessas áreas será retirado da experiência ativa durante a reconstrução.
 
-## Segurança
+## Arquitetura alvo
 
-Camadas atuais implementadas:
+| Camada | Escolha | Responsabilidade |
+| --- | --- | --- |
+| Web | React, TypeScript e Vite | Landing, cardápio, checkout e painéis. |
+| API | Monólito modular em Spring Boot | Autorização, preço, cupom, pedido, pagamento e entrega. |
+| Dados | PostgreSQL com Flyway | Dados por loja, valores em centavos e histórico de eventos. |
+| Infraestrutura | VM da DigitalOcean | Aplicação, proxy, banco privado, backups e observabilidade. |
+| Integrações | Um provedor de pagamento e mensageria assíncrona | Confirmar pagamentos e comunicar estados sem bloquear pedidos. |
 
-- Proteção contra tentativas excessivas de login.
-- Recuperação de senha por e-mail.
-- OTP por e-mail como camada opcional.
-- Dispositivos confiáveis no perfil.
-- Step-up auth para ações críticas no painel do lojista.
-- RLS no Supabase para isolamento de dados entre contas/lojas.
+A decisão está em [docs/adr/0004-digitalocean-modular-monolith.md](docs/adr/0004-digitalocean-modular-monolith.md). O frontend e as rotinas antigas ainda têm referências ao Supabase; a remoção total faz parte do corte em andamento.
 
-## Planos e Modelo Comercial
+## Organização do código
 
-- Cliente final usa gratuitamente para comprar.
-- A assinatura é para lojistas (acesso ao painel e recursos por plano).
-- Checkout de plano com fluxo dedicado no produto.
+| Diretório | Responsabilidade |
+| --- | --- |
+| `src/` | Aplicação web, componentes e telas; parte ainda é legada. |
+| `backend/src/main/java/.../platform/auth` | Autenticação e sessões da API própria. |
+| `backend/src/main/java/.../platform/stores` | Cadastro, publicação e operação da loja. |
+| `backend/src/main/resources/db/migration` | Esquema PostgreSQL versionado. |
+| `backend/src/main/java/.../payment` | Integração de pagamento existente, em revisão. |
+| `docs/adr` | Decisões técnicas e seus motivos. |
+| `supabase/` | Migrações históricas do protótipo; serão removidas após o corte. |
 
-## Automação WhatsApp
+A estrutura será organizada por domínio: `auth`, `stores`, `catalog`, `customers`, `orders`, `payments`, `delivery`, `messaging`, `subscriptions` e `reporting`. Cada domínio expõe suas rotas e mantém suas regras no backend.
 
-Suporte a:
+## Contrato de rotas do MVP
 
-- Templates por evento.
-- Fila de eventos.
-- Worker para disparo.
-- Receiver backend para integração com provedores.
+| Público | Lojista autenticado | Entregador autenticado |
+| --- | --- | --- |
+| `GET /api/public/stores/{slug}` | `GET /api/merchant/store` | `GET /api/drivers/deliveries` |
+| `GET /api/public/stores/{slug}/menu` | `GET /api/merchant/orders` | `PATCH /api/drivers/deliveries/{id}/status` |
+| `POST /api/public/stores/{slug}/quote` | `PATCH /api/merchant/orders/{id}/status` | |
+| `POST /api/public/stores/{slug}/orders` | `GET /api/merchant/products` | |
 
-Eventos comuns:
+Esta tabela é um **contrato alvo**, não uma afirmação de que todas as rotas já estão disponíveis.
 
-- Novo pedido.
-- Mudança de status.
-- Aceite de entrega.
-- Pedido saiu para entrega.
+## Desenvolvimento local
 
-## Stack Tecnológica
+Pré-requisitos: Node.js 18+, npm, Java 11+ e Maven 3.9+. A API própria precisa de PostgreSQL para executar as migrações; a suíte Java usa H2 em testes de contexto. A configuração de produção na DigitalOcean ainda está sendo preparada.
 
-- Frontend: React 18, TypeScript, Vite.
-- UI: Tailwind CSS, shadcn/ui, Lucide.
-- Estado e dados: TanStack Query.
-- Formulários e validação: React Hook Form + Zod.
-- Backend de dados/autenticação: Supabase (Auth, Postgres, Storage, RLS).
-- Backend de automação: Spring Boot (Java 11).
+1. Execute `npm install`.
+2. Copie `backend/.env.example` para `backend/.env` e configure o PostgreSQL local.
+3. Inicie a API com `npm run backend:dev`.
+4. Em outro terminal, inicie a web com `npm run dev`.
 
-## Arquitetura Resumida
+O projeto legado ainda possui variáveis e telas que dependem do Supabase. O modo local ficará plenamente utilizável quando o frontend estiver conectado apenas à nova API. Nenhum segredo deve ser versionado.
 
-- `src/pages`: telas por domínio (`admin`, `client`, `driver`, `public`, `auth`).
-- `src/components`: componentes visuais e layouts.
-- `src/hooks`: hooks de autenticação e estado.
-- `src/lib`: regras de negócio, segurança e utilitários.
-- `supabase/migrations`: evolução do schema.
-- `backend/`: receiver e integrações de automação.
+Para verificar o código, execute `npm run lint`, `npm run test`, `npm run build` e `npm run backend:test`.
 
-Referência completa de organização e governança:
+## Critério de pronto
 
-- `docs/PROJECT_STRUCTURE.md`
+O MVP estará pronto quando **uma loja real conseguir publicar o cardápio, divulgar seu link, receber um pedido sem cadastro obrigatório, receber o pagamento, preparar, entregar e comunicar o cliente**, com isolamento entre lojas e recuperação segura de falhas. Uma landing publicada ou uma API que compila não substitui esse fluxo completo.
 
-## Como Rodar Local
+Antes de aceitar dinheiro real, ainda são necessários testes de pagamento e webhook, idempotência, autorização por loja, backup e restauração, observabilidade, política de dados e validação com lojas piloto. O projeto não deve ser apresentado como disponível comercialmente antes dessa verificação.
 
-Pré-requisitos:
+## Próximos marcos
 
-- Node.js 18+
-- npm 9+
-- Java 11
-- Maven 3.9+
+1. Retirar o Supabase da aplicação ativa e consolidar o banco próprio.
+2. Fechar o fluxo de loja, catálogo, checkout sem conta e pedido com preço calculado no servidor.
+3. Integrar Pix, cartão e webhook assinado com um único provedor.
+4. Concluir painel operacional, entrega, comunicação e recompra.
+5. Publicar a nova identidade visual e iniciar cinco lojas piloto.
 
-### 1) Instalar dependências
+## Licença e contato
 
-```bash
-npm install
-```
-
-### 2) Configurar `.env`
-
-Copie o template versionado e preencha com seus valores:
-
-```bash
-cp .env.example .env
-```
-
-No Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Depois ajuste o arquivo `.env` na raiz:
-
-```env
-VITE_SUPABASE_URL="https://SEU-PROJETO.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY="SUA_ANON_KEY"
-VITE_SUPABASE_PROJECT_ID="SEU_PROJECT_ID"
-```
-
-Importante: o arquivo `.env` **nao deve** ser versionado no Git.
-
-### 3) Subir backend (terminal 1)
-
-```bash
-npm run backend:dev
-```
-
-Padrão: `http://localhost:8080`
-
-Se a porta estiver ocupada (PowerShell):
-
-```powershell
-$env:SERVER_PORT=8082; npm run backend:dev
-```
-
-### 4) Subir frontend (terminal 2)
-
-```bash
-npm run dev
-```
-
-Use a URL exibida no terminal (normalmente `http://localhost:8081` ou `http://localhost:5173`).
-
-## Como Publicar
-
-Para publicar sem Docker:
-
-- Frontend: Vercel
-- Backend Java: Render
-- Supabase: mantem como backend gerenciado
-
-Guia direto:
-
-- `docs/DEPLOY_PRODUCAO.md`
-
-## Setup de Supabase Novo
-
-Se o projeto antigo do Supabase estiver sem acesso/permissão, siga:
-
-- `docs/SETUP_SUPABASE_NOVO_PROJETO.md`
-
-Esse guia cobre criação de projeto novo, atualização do `.env` e aplicação do banco via CLI ou SQL Editor.
-
-## Bootstrap Rápido
-
-Comandos mínimos para preparar ambiente local com segurança:
-
-```bash
-npm install
-npm run setup:hooks
-```
-
-Depois:
-
-```bash
-npm run backend:dev
-npm run dev
-```
-
-## Migrations Obrigatórias
-
-Antes de homologar ou publicar, aplique todas as migrations do projeto no Supabase, com atenção especial para:
-
-- `20260401120000_store_subscription_billing.sql`
-- `20260401133000_account_security_upgrade.sql`
-- `20260401170000_delivery_proof_hardening.sql`
-- `20260402110000_order_idempotency.sql`
-- `20260402123000_payment_webhook_idempotency_hardening.sql`
-- `20260402132000_start_plan_checkout_rpc_repair.sql`
-- `20260402143000_scale_hardening.sql`
-- `20260406230000_store_trial_30_days.sql`
-- `20260407001000_trial_auto_rollover_pending.sql`
-- `20260407003000_subscription_lifecycle_automation.sql`
-
-Sem essas migrations, partes de assinatura, segurança de conta e comprovação de entrega podem falhar.
-
-### Trial de 30 dias (com cobrança automática pós-teste)
-
-- Durante o período de teste, a assinatura fica ativa.
-- Ao vencer o trial, um job no backend move a assinatura para `pending_payment` e gera nova sessão de checkout automaticamente.
-- O acesso ao painel fica bloqueado até o pagamento ser confirmado.
-- Assinaturas ativas com período vencido viram `expired` automaticamente.
-- Assinaturas `pending_payment` antigas também expiram automaticamente para evitar pendências fantasmas.
-
-### Como aplicar migrations (Supabase CLI)
-
-1. Use a CLI com `npx` (recomendado):
-
-```bash
-npx supabase@latest --version
-```
-
-2. Faça login:
-
-```bash
-npx supabase@latest login
-```
-
-3. Linke o projeto (use o `VITE_SUPABASE_PROJECT_ID` do `.env`):
-
-```bash
-npx supabase@latest link --project-ref SEU_PROJECT_ID
-```
-
-4. Aplique tudo que está pendente:
-
-```bash
-npx supabase@latest db push
-```
-
-### Teste rápido pós-migration (5 minutos)
-
-1. Abrir uma loja e ir para checkout.
-2. Finalizar pedido clicando repetidamente no botão.
-3. Validar que foi gerado apenas 1 pedido (sem duplicidade).
-4. Repetir confirmação de pagamento do plano.
-5. Validar que não duplica evento de confirmação e o status da assinatura permanece consistente.
-
-## Go-live em 5 Minutos
-
-Fluxo rápido para validar prontidão:
-
-1. Abra `/admin/go-live`.
-2. Clique em `Rodar diagnostico`.
-3. Marque o checklist operacional.
-4. Execute a matriz PASS/FAIL completa.
-5. Verifique se os gates de liberação estão em `PASS`.
-6. Exporte `relatorio JSON` e `auditoria CSV`.
-7. Abra `/admin/go-live/apresentacao` para reunião com cliente.
-
-Critério de liberação recomendado:
-
-- Score >= 90%
-- Gates 100% em `PASS`
-- Conformidade de entrega >= 90%
-
-## Primeiros Clientes (Execução Rápida)
-
-Kit pronto para sair do zero até os primeiros lojistas pagantes:
-
-- Plano de 7 dias e operação prática:
-  - `docs/FIRST_CLIENT_LAUNCH_KIT.md`
-- Plano de lançamento em 27 dias:
-  - `docs/PLANO_27_DIAS_LANCAMENTO.md`
-- Checklist final de produção:
-- `docs/CHECKLIST_FINAL_PRODUCAO.md`
-- Runbook final do dia de lançamento:
-  - `docs/GO_LIVE_RUNBOOK_FINAL.md`
-- Checklist de lançamento em 3 dias:
-  - `docs/LAUNCH_3_DIAS_CHECKLIST.md`
-- SQL de validação pré-lançamento:
-  - `docs/SQL_VALIDACAO_PRE_LANCAMENTO.sql`
-- Mensagens prontas de abordagem:
-  - `docs/templates/WHATSAPP_OUTREACH.txt`
-- Checklist de contingência diária:
-  - `docs/templates/OPERACAO_MVP_CHECKLIST.md`
-- Planilha mínima de métricas:
-  - `docs/templates/METRICS_TRACKER.csv`
-
-## Scripts Úteis
-
-- `npm run dev`: ambiente local frontend.
-- `npm run backend:dev`: backend Java local.
-- `npm run backend:build`: build do backend.
-- `npm run backend:test`: testes do backend.
-- `npm run check:repo`: bloqueia arquivos sensíveis rastreados no Git.
-- `npm run check:security`: alias para checks de segurança de repositório.
-- `npm run check:launch-3d`: checklist automatizado de prontidão para lançamento.
-- `npm run build`: build de produção frontend.
-- `npm run preview`: preview do build frontend.
-- `npm run lint`: análise estática.
-- `npm run test`: testes.
-- `npm run load:smoke`: smoke test simples de carga na API de eventos.
-
-## Rotas Principais
-
-- `/`: landing institucional.
-- `/planos`: visão de planos.
-- `/planos/checkout`: checkout de assinatura.
-- `/login`, `/registro`: acesso lojista.
-- `/cliente/login`, `/cliente/registro`, `/cliente/conta`: jornada cliente.
-- `/entregador/login`, `/entregador/registro`, `/entregador`: jornada entregador.
-- `/loja/:slug`: cardápio público.
-- `/loja/:slug/checkout`: checkout da loja.
-- `/admin/*`: painel do lojista.
-
-## Qualidade e Produção
-
-Checklist recomendado antes de publicar:
-
-- Rodar `npm run lint`.
-- Rodar `npm run test`.
-- Rodar `npm run build`.
-- Validar fluxo completo de cliente, lojista e entregador.
-- Revisar variáveis de ambiente no provedor.
-- Confirmar políticas RLS e permissões no Supabase.
-
-## Homologação PASS/FAIL
-
-Use a matriz da Central de Go-live e valide os 7 casos:
-
-1. Cliente finaliza pedido com sucesso.
-2. Pedido aparece e atualiza no Kanban.
-3. Despacho de entrega funciona.
-4. Entrega com PIN + foto + recebedor + GPS válido.
-5. Entrega com bypass de GPS + justificativa.
-6. Rastreio em tempo real no cliente.
-7. Exportação de auditoria CSV sem erro.
-
-Documente resultado e só libere após 100% PASS.
-
-## Segurança de Segredos
-
-- Nunca versionar segredos reais (`.env`, chaves privadas, tokens, credenciais SMTP/DB).
-- `VITE_SUPABASE_PUBLISHABLE_KEY` e `VITE_SUPABASE_URL` podem ficar no frontend (sao publicos por design).
-- Nunca expor `service_role` no frontend nem no Git.
-
-Se `.env` ou qualquer segredo já foi commitado no passado:
-
-1. Remover do versionamento (`git rm --cached .env`).
-2. Rotacionar imediatamente todas as credenciais afetadas.
-3. Revisar logs e acessos suspeitos.
-4. Revalidar CI com `secret-scan`.
-
-### Scan local (pre-commit)
-
-Ative os hooks versionados:
-
-```bash
-npm run setup:hooks
-```
-
-Com isso, todo commit roda scan de segredos com `gitleaks`.
-
-### Scan no CI
-
-Existe workflow em `.github/workflows/secret-scan.yml` para varredura automatica em `push` e `pull_request`.
-
-## Troubleshooting
-
-### PowerShell bloqueando `npm`
-
-Use `npm.cmd`:
-
-```bash
-npm.cmd run dev
-npm.cmd run build
-```
-
-### Porta 8080 ocupada
-
-- Encerrar processo que usa a porta.
-- Ou subir backend com outra porta (`SERVER_PORT`).
-
-### Aplicação sem dados
-
-- Verificar `.env`.
-- Conferir projeto/chaves Supabase.
-- Conferir migrations aplicadas.
-- Validar tabelas e políticas RLS.
-
-### Erro de schema no login/segurança
-
-Exemplo comum:
-
-- `Could not find the table 'public.user_security_settings'`
-
-Ação:
-
-- aplicar migration `20260401133000_account_security_upgrade.sql`
-- reiniciar frontend após a migration
-
-### Prova de entrega não salva
-
-Cheque:
-
-- bucket `delivery-proofs` existe
-- policies do bucket foram criadas
-- migration `20260401170000_delivery_proof_hardening.sql` aplicada
-- usuário entregador autenticado
-
-### Realtime não atualiza no rastreio
-
-Cheque:
-
-- diagnóstico `Realtime` em `/admin/go-live`
-- políticas RLS da tabela `order_deliveries`
-- bloqueios de rede/proxy no ambiente
-
-## Roadmap Sugerido
-
-- Plano executivo 30/60/90:
-  - `docs/ROADMAP_30_60_90.md`
-- Evolução contínua:
-  - Métricas avançadas de funil e retenção.
-  - Gestão financeira por loja.
-  - Regras de entrega por raio e horário.
-  - Notificações em tempo real mais robustas.
-  - Evolução de assinaturas e cobrança automática.
-
-## Smoke de Escala
-
-Checklist rápido:
-
-- `docs/LOAD_SMOKE_CHECKLIST.md`
-
-## Licença
-
-Uso proprietário/interno. Ajuste esta seção quando definir a licença oficial do produto.
+O repositório ainda não declara uma licença de uso público. Para discutir o produto ou colaborar, abra uma issue neste repositório.
