@@ -65,6 +65,8 @@ payments:
   supabase-service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
 
 platform:
+  orders:
+    tracking-secret: ${ORDER_TRACKING_SECRET:}
   auth:
     app-base-url: ${APP_BASE_URL:http://localhost:5173}
     jwt-secret: ${APP_AUTH_JWT_SECRET:}
