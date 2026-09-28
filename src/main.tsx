@@ -14,18 +14,7 @@ import "@fontsource/inter/latin-ext-700.css";
 import "@fontsource/instrument-serif/latin-ext-400.css";
 import "@fontsource/instrument-serif/latin-ext-400-italic.css";
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
-import "./index.css";
-import { initClientErrorMonitoring } from "@/lib/observability";
-
-initClientErrorMonitoring();
+import App from "./app/App.tsx";
+import "./app/styles.css";
 
 createRoot(document.getElementById("root")!).render(<App />);
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // fallback silencioso
-    });
-  });
-}
