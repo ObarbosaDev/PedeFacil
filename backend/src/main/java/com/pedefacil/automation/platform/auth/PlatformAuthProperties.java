@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth;
+package com.pedefacil.automation.platform.auth;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

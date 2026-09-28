@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.service;
+package com.pedefacil.automation.platform.auth.service;
 
 import com.pedefacil.automation.platform.auth.model.AppUser;
 

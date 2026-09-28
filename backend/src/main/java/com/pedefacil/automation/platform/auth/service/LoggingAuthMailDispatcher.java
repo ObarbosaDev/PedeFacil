@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.service;
+package com.pedefacil.automation.platform.auth.service;
 
 import com.pedefacil.automation.platform.auth.model.AppUser;
 import org.slf4j.Logger;
@@ -12,11 +12,11 @@ public class LoggingAuthMailDispatcher implements AuthMailDispatcher {
 
   @Override
   public void sendVerificationEmail(AppUser user, String token, String confirmationUrl) {
-    log.info("Verification email pending for {} token={} url={}", user.getEmail(), token, confirmationUrl);
+    log.warn("Email de verificacao nao enviado: configure um provedor de email antes de ativar o novo auth.");
   }
 
   @Override
   public void sendPasswordResetEmail(AppUser user, String token, String resetUrl) {
-    log.info("Password reset email pending for {} token={} url={}", user.getEmail(), token, resetUrl);
+    log.warn("Email de redefinicao nao enviado: configure um provedor de email antes de ativar o novo auth.");
   }
 }

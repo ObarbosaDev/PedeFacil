@@ -1,6 +1,7 @@
-﻿package com.pedefacil.automation.platform.auth;
+package com.pedefacil.automation.platform.auth;
 
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,18 @@ public class JwtService {
             "typ", "access"))
         .signWith(getKey(), SignatureAlgorithm.HS256)
         .compact();
+  }
+
+  public Claims verifyAccessToken(String token) {
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(getKey())
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
+    if (!"access".equals(claims.get("typ", String.class))) {
+      throw new IllegalArgumentException("Tipo de token invalido.");
+    }
+    return claims;
   }
 
   private SecretKey getKey() {

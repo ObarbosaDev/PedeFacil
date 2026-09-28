@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.repo;
+package com.pedefacil.automation.platform.auth.repo;
 
 import com.pedefacil.automation.platform.auth.model.EmailVerificationToken;
 import java.util.Optional;

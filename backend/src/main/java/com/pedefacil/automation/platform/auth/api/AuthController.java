@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.api;
+package com.pedefacil.automation.platform.auth.api;
 
 import com.pedefacil.automation.platform.auth.service.AuthService;
 import javax.validation.Valid;

@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.api;
+package com.pedefacil.automation.platform.auth.api;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;

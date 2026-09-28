@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.model;
+package com.pedefacil.automation.platform.auth.model;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;

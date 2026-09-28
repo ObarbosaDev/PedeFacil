@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth;
+package com.pedefacil.automation.platform.auth;
 
 import java.nio.charset.StandardCharsets;
 import org.springframework.context.annotation.Bean;

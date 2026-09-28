@@ -1,4 +1,4 @@
-﻿package com.pedefacil.automation.platform.auth.service;
+package com.pedefacil.automation.platform.auth.service;
 
 import com.pedefacil.automation.platform.auth.JwtService;
 import com.pedefacil.automation.platform.auth.PlatformAuthProperties;
@@ -17,6 +17,8 @@ import com.pedefacil.automation.platform.auth.repo.AppUserRepository;
 import com.pedefacil.automation.platform.auth.repo.EmailVerificationTokenRepository;
 import com.pedefacil.automation.platform.auth.repo.PasswordResetTokenRepository;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.Locale;
@@ -61,6 +63,7 @@ public class AuthService {
 
   @Transactional
   public AuthTokensResponse register(RegisterRequest request) {
+    AppUserRole publicRole = parsePublicRole(request.getRole());
     String normalizedEmail = normalizeEmail(request.getEmail());
     if (appUserRepository.existsByEmailIgnoreCase(normalizedEmail)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe conta com esse e-mail.");
@@ -70,13 +73,13 @@ public class AuthService {
     user.setEmail(normalizedEmail);
     user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
     user.setFullName(request.getFullName().trim());
-    user.setRole(parseRole(request.getRole()));
+    user.setRole(publicRole);
     user = appUserRepository.save(user);
 
     String verificationTokenValue = generateOpaqueToken();
     EmailVerificationToken verificationToken = new EmailVerificationToken();
     verificationToken.setUser(user);
-    verificationToken.setToken(verificationTokenValue);
+    verificationToken.setToken(hashToken(verificationTokenValue));
     verificationToken.setExpiresAt(OffsetDateTime.now().plusHours(properties.getEmailVerificationTokenHours()));
     emailVerificationTokenRepository.save(verificationToken);
 
@@ -111,7 +114,7 @@ public class AuthService {
 
   @Transactional
   public MessageResponse confirmEmail(String tokenValue) {
-    EmailVerificationToken token = emailVerificationTokenRepository.findByToken(tokenValue)
+    EmailVerificationToken token = emailVerificationTokenRepository.findByToken(hashToken(tokenValue))
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Token de confirmacao nao encontrado."));
 
     if (token.getUsedAt() != null) {
@@ -137,7 +140,7 @@ public class AuthService {
       String tokenValue = generateOpaqueToken();
       PasswordResetToken token = new PasswordResetToken();
       token.setUser(user);
-      token.setToken(tokenValue);
+      token.setToken(hashToken(tokenValue));
       token.setExpiresAt(OffsetDateTime.now().plusMinutes(properties.getPasswordResetTokenMinutes()));
       passwordResetTokenRepository.save(token);
       String resetUrl = properties.getAppBaseUrl() + "/redefinir-senha?token=" + tokenValue;
@@ -151,7 +154,7 @@ public class AuthService {
 
   @Transactional
   public MessageResponse confirmPasswordReset(String tokenValue, String newPassword) {
-    PasswordResetToken token = passwordResetTokenRepository.findByToken(tokenValue)
+    PasswordResetToken token = passwordResetTokenRepository.findByToken(hashToken(tokenValue))
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Token de redefinicao nao encontrado."));
 
     if (token.getUsedAt() != null) {
@@ -172,7 +175,7 @@ public class AuthService {
 
   @Transactional
   public AuthTokensResponse refresh(String refreshTokenValue) {
-    AppRefreshToken refreshToken = appRefreshTokenRepository.findByToken(refreshTokenValue)
+    AppRefreshToken refreshToken = appRefreshTokenRepository.findByToken(hashToken(refreshTokenValue))
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token invalido."));
 
     if (refreshToken.getRevokedAt() != null || refreshToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
@@ -187,13 +190,14 @@ public class AuthService {
   private AuthTokensResponse issueTokens(AppUser user) {
     AppRefreshToken refreshToken = new AppRefreshToken();
     refreshToken.setUser(user);
-    refreshToken.setToken(generateOpaqueToken());
+    String rawRefreshToken = generateOpaqueToken();
+    refreshToken.setToken(hashToken(rawRefreshToken));
     refreshToken.setExpiresAt(OffsetDateTime.now().plusDays(properties.getRefreshTokenDays()));
     appRefreshTokenRepository.save(refreshToken);
 
     AuthTokensResponse response = new AuthTokensResponse();
     response.setAccessToken(jwtService.issueAccessToken(user.getId().toString(), user.getEmail(), user.getRole().name()));
-    response.setRefreshToken(refreshToken.getToken());
+    response.setRefreshToken(rawRefreshToken);
     response.setUser(toUserResponse(user));
     return response;
   }
@@ -208,12 +212,17 @@ public class AuthService {
     return response;
   }
 
-  private AppUserRole parseRole(String role) {
+  private AppUserRole parsePublicRole(String role) {
+    AppUserRole parsed;
     try {
-      return AppUserRole.valueOf(role.trim().toUpperCase(Locale.ROOT));
+      parsed = AppUserRole.valueOf(role.trim().toUpperCase(Locale.ROOT));
     } catch (Exception error) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role invalida.");
     }
+    if (parsed == AppUserRole.ADMIN) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cadastro administrativo indisponivel.");
+    }
+    return parsed;
   }
 
   private String normalizeEmail(String email) {
@@ -224,5 +233,18 @@ public class AuthService {
     byte[] bytes = new byte[32];
     secureRandom.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
+  private String hashToken(String rawToken) {
+    if (rawToken == null || rawToken.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token invalido.");
+    }
+    try {
+      byte[] digest = MessageDigest.getInstance("SHA-256")
+          .digest(rawToken.getBytes(StandardCharsets.UTF_8));
+      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+    } catch (Exception exception) {
+      throw new IllegalStateException("Falha ao proteger token.", exception);
+    }
   }
 }
