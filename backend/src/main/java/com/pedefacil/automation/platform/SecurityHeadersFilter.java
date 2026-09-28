@@ -1,4 +1,4 @@
-package com.pedefacil.automation.payment;
+package com.pedefacil.automation.platform;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -14,7 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class PaymentsSecurityHeadersFilter extends OncePerRequestFilter {
+public class SecurityHeadersFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
@@ -23,7 +23,7 @@ public class PaymentsSecurityHeadersFilter extends OncePerRequestFilter {
       FilterChain filterChain) throws ServletException, IOException {
 
     String path = request.getRequestURI();
-    if (path != null && path.startsWith("/api/payments")) {
+    if (path != null && path.startsWith("/api/")) {
       String requestId = request.getHeader("X-Request-Id");
       if (requestId == null || requestId.isBlank()) {
         requestId = UUID.randomUUID().toString();

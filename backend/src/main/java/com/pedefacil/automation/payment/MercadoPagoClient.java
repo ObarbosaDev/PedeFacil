@@ -142,18 +142,13 @@ public class MercadoPagoClient {
           return objectMapper.readTree(response.body());
         }
 
-        String bodySnippet = response.body() == null ? "" : response.body();
-        if (bodySnippet.length() > 220) {
-          bodySnippet = bodySnippet.substring(0, 220);
-        }
         boolean retryable = isRetryableStatus(statusCode);
         log.warn(
-            "{} retornou status {} (tentativa {}/{}). Body resumido: {}",
+            "{} retornou status {} (tentativa {}/{}).",
             operation,
             statusCode,
             attempt,
-            maxAttempts,
-            bodySnippet);
+            maxAttempts);
 
         if (!retryable || attempt == maxAttempts) {
           throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,

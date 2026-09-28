@@ -1,4 +1,4 @@
-package com.pedefacil.automation.payment;
+package com.pedefacil.automation.platform;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
-public class PaymentsExceptionHandler {
+public class ApiExceptionHandler {
 
   @ExceptionHandler(ResponseStatusException.class)
   public ResponseEntity<Map<String, Object>> handleStatus(ResponseStatusException ex) {
@@ -19,7 +19,7 @@ public class PaymentsExceptionHandler {
     body.put("ok", false);
     body.put("status", status.value());
     body.put("error", status.getReasonPhrase());
-    body.put("message", ex.getReason() != null ? ex.getReason() : "Erro de pagamento.");
+    body.put("message", ex.getReason() != null ? ex.getReason() : "Requisicao invalida.");
     body.put("timestamp", OffsetDateTime.now().toString());
     return ResponseEntity.status(status).body(body);
   }
@@ -30,7 +30,7 @@ public class PaymentsExceptionHandler {
     body.put("ok", false);
     body.put("status", 500);
     body.put("error", "Internal Server Error");
-    body.put("message", "Erro inesperado ao processar o pagamento.");
+    body.put("message", "Erro inesperado ao processar a requisicao.");
     body.put("timestamp", OffsetDateTime.now().toString());
     return ResponseEntity.status(500).body(body);
   }
