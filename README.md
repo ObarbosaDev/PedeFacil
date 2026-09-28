@@ -1,106 +1,87 @@
 # Pede Fácil
 
-**Seu canal próprio de pedidos. Uma operação clara. Clientes que voltam.**
+**Venda direto. Faça o cliente voltar.**
 
-O Pede Fácil está sendo reconstruído para ajudar restaurantes independentes a vender diretamente pelo próprio link, receber pedidos organizados e manter o relacionamento com cada cliente. O foco inicial são pizzarias, hamburguerias, açaíterias e restaurantes com delivery que já vendem por WhatsApp, Instagram ou marketplace e processam de 20 a 150 pedidos por dia.
+O Pede Fácil está sendo construído para pizzarias, hamburguerias, açaíterias e restaurantes independentes com delivery. Cada loja terá seu próprio link para receber pedidos, organizar a operação e manter o relacionamento com os clientes. O recorte inicial são operações de 20 a 150 pedidos por dia que hoje vendem por WhatsApp, Instagram ou marketplace.
 
-> **Estado do projeto:** reconstrução do MVP. Este repositório ainda contém código legado do protótipo. Não há dados reais a migrar. Recursos descritos como objetivo abaixo não devem ser interpretados como prontos para operar com pagamentos reais.
+> **Estado atual:** reconstrução do MVP. A interface e a API ainda não processam pagamentos reais. Não use este repositório para operar uma loja em produção antes de concluir os fluxos financeiros e os testes de ponta a ponta.
 
 ## O produto em uma venda
 
-1. O lojista publica a loja e compartilha seu link ou QR Code.
-2. O cliente abre o cardápio, monta o carrinho e compra sem criar senha.
-3. O pedido chega à loja, o pagamento é confirmado e a equipe prepara.
-4. A loja entrega ou libera a retirada; o cliente acompanha e pode pedir novamente.
+```text
+Loja publica cardápio → divulga seu link → cliente compra sem conta
+→ pagamento é confirmado → equipe prepara → entrega ou libera retirada
+→ cliente acompanha e pode comprar novamente
+```
 
-O Pede Fácil vende quatro resultados: **canal próprio de pedidos**, **operação organizada**, **relacionamento direto com o cliente** e **recorrência de vendas**. A experiência começa no link da loja; não é um catálogo público de restaurantes.
+Os quatro resultados buscados são **canal próprio**, **operação organizada**, **relacionamento direto** e **recorrência de vendas**. O Pede Fácil não é um marketplace para descobrir restaurantes.
 
-### Para o lojista
+## O que já existe
 
-- Publicar loja, horários, áreas de entrega, categorias, produtos e adicionais.
-- Receber pedidos, confirmar, informar previsão e acompanhar a preparação.
-- Organizar retirada e entregas com entregadores próprios ou convidados.
-- Consultar clientes, histórico, cupons e indicadores essenciais.
-
-### Para o cliente
-
-- Abrir o cardápio sem login e comprar por Pix ou cartão sem criar senha.
-- Escolher entrega ou retirada, acompanhar o pedido por link e repetir uma compra.
-- Criar uma conta opcional após o pedido.
-
-### Para a entrega
-
-- Aceitar uma corrida atribuída pela loja, navegar até os endereços e atualizar o status.
-- Confirmar a entrega por PIN e registrar uma ocorrência simples.
-
-## Limites do MVP
-
-O produto inicial atende **uma loja por operação**, com frota própria ou convidada. Marketplace de restaurantes, distribuição pública de corridas, carteira de entregadores, cashback, ranking, múltiplos gateways e aplicativo nativo estão fora do MVP. O código legado dessas áreas será retirado da experiência ativa durante a reconstrução.
-
-## Arquitetura alvo
-
-| Camada | Escolha | Responsabilidade |
-| --- | --- | --- |
-| Web | React, TypeScript e Vite | Landing, cardápio, checkout e painéis. |
-| API | Monólito modular em Spring Boot | Autorização, preço, cupom, pedido, pagamento e entrega. |
-| Dados | PostgreSQL com Flyway | Dados por loja, valores em centavos e histórico de eventos. |
-| Infraestrutura | VM da DigitalOcean | Aplicação, proxy, banco privado, backups e observabilidade. |
-| Integrações | Um provedor de pagamento e mensageria assíncrona | Confirmar pagamentos e comunicar estados sem bloquear pedidos. |
-
-A decisão está em [docs/adr/0004-digitalocean-modular-monolith.md](docs/adr/0004-digitalocean-modular-monolith.md). O frontend e as rotinas antigas ainda têm referências ao Supabase; a remoção total faz parte do corte em andamento.
-
-## Organização do código
-
-| Diretório | Responsabilidade |
+| Área | Estado |
 | --- | --- |
-| `src/` | Aplicação web, componentes e telas; parte ainda é legada. |
-| `backend/src/main/java/.../platform/auth` | Autenticação e sessões da API própria. |
-| `backend/src/main/java/.../platform/stores` | Cadastro, publicação e operação da loja. |
-| `backend/src/main/resources/db/migration` | Esquema PostgreSQL versionado. |
-| `backend/src/main/java/.../payment` | Integração de pagamento existente, em revisão. |
-| `docs/adr` | Decisões técnicas e seus motivos. |
-| `supabase/` | Migrações históricas do protótipo; serão removidas após o corte. |
+| Landing e identidade visual | Implementadas, com demonstração ilustrativa identificada e convite para o piloto. |
+| Cadastro, login e recuperação | API própria com sessão revogável, verificação de e-mail e tokens protegidos; requer SMTP configurado. |
+| Loja e cardápio | Cadastro da loja, horários, zonas de entrega, categorias, produtos, adicionais, disponibilidade e publicação. |
+| Cardápio público | Página por loja, busca, filtro, opções, carrinho persistente e cotação calculada pela API. |
+| Pedidos | Criação idempotente e máquina de estados na API; painel e acompanhamento por link. |
+| Pagamento e entrega | Ainda não integrados ao fluxo de venda; compra no cardápio permanece bloqueada. |
 
-A estrutura será organizada por domínio: `auth`, `stores`, `catalog`, `customers`, `orders`, `payments`, `delivery`, `messaging`, `subscriptions` e `reporting`. Cada domínio expõe suas rotas e mantém suas regras no backend.
+O objetivo do MVP inclui Pix e cartão, cupons, frota própria ou convidada, comunicação, recompra e assinatura da plataforma. A lista completa e as exclusões estão em [docs/product/MVP_SCOPE.md](docs/product/MVP_SCOPE.md).
 
-## Contrato de rotas do MVP
+## Arquitetura
 
-| Público | Lojista autenticado | Entregador autenticado |
-| --- | --- | --- |
-| `GET /api/public/stores/{slug}` | `GET /api/merchant/store` | `GET /api/drivers/deliveries` |
-| `GET /api/public/stores/{slug}/menu` | `GET /api/merchant/orders` | `PATCH /api/drivers/deliveries/{id}/status` |
-| `POST /api/public/stores/{slug}/quote` | `PATCH /api/merchant/orders/{id}/status` | |
-| `POST /api/public/stores/{slug}/orders` | `GET /api/merchant/products` | |
+```text
+src/
+  app/                 rotas, sessão, cliente HTTP e estilos globais
+  features/
+    auth/              entrada e recuperação de acesso
+    landing/           apresentação comercial
+    merchant/          operação da loja
+    storefront/        cardápio e acompanhamento
+backend/src/main/
+  java/.../platform/
+    auth/              identidade e sessões
+    stores/            loja, horário, entrega e publicação
+    catalog/           categorias, produtos e adicionais
+    orders/            cotação, criação e estados
+  resources/db/migration/   esquema PostgreSQL com Flyway
+```
 
-Esta tabela é um **contrato alvo**, não uma afirmação de que todas as rotas já estão disponíveis.
+A web usa React, TypeScript e Vite. A API é um monólito modular em Spring Boot com PostgreSQL. Cálculo de preço, autorização, pedido e mudanças de estado pertencem ao servidor. A implantação planejada é em uma VM da DigitalOcean, com banco privado, proxy HTTPS, backups e monitoramento. Não há Supabase na aplicação ativa nem dados reais para migrar.
 
-## Desenvolvimento local
+As decisões estão em [docs/adr](docs/adr). O código preserva alguns adaptadores de integração para revisão antes da ativação; eles não tornam o pagamento operacional.
 
-Pré-requisitos: Node.js 18+, npm, Java 11+ e Maven 3.9+. A API própria precisa de PostgreSQL para executar as migrações; a suíte Java usa H2 em testes de contexto. A configuração de produção na DigitalOcean ainda está sendo preparada.
+## Rodar localmente
 
-1. Execute `npm install`.
-2. Configure o PostgreSQL e os segredos da API apenas na sua máquina, fora do Git.
-3. Inicie a API com `npm run backend:dev`.
-4. Em outro terminal, inicie a web com `npm run dev`.
+Pré-requisitos: **Node.js 22**, **npm**, **Java 17**, **Maven** e **PostgreSQL**. O backend usa a porta 8081; o Vite usa a 5173 e encaminha `/api` para a API.
 
-O projeto legado ainda possui variáveis e telas que dependem do Supabase. O modo local ficará plenamente utilizável quando o frontend estiver conectado apenas à nova API. Nenhum segredo deve ser versionado.
+1. Crie um banco PostgreSQL local e configure `DATABASE_URL` no formato JDBC, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `APP_AUTH_JWT_SECRET` e `ORDER_TRACKING_SECRET` apenas no ambiente da sua máquina.
+2. Para testar cadastro e recuperação de acesso, configure SMTP via propriedades `SPRING_MAIL_*` e `MAIL_FROM`. A URL usada nos e-mails vem de `APP_BASE_URL`.
+3. Rode `npm ci`, `npm run backend:dev` e, em outro terminal, `npm run dev`.
+4. Abra `http://localhost:5173`.
 
-Para verificar o código, execute `npm run lint`, `npm run test`, `npm run build` e `npm run backend:test`.
+O carregador local aceita `backend/.env` ou `.env`, mas esses arquivos são ignorados pelo Git. Nunca os adicione ao repositório, mesmo como modelo. Em ambiente implantado, configure segredos diretamente na VM ou no gerenciador de segredos escolhido. O Flyway aplica as migrações ao iniciar a API.
 
-## Critério de pronto
+### Verificações
 
-O MVP estará pronto quando **uma loja real conseguir publicar o cardápio, divulgar seu link, receber um pedido sem cadastro obrigatório, receber o pagamento, preparar, entregar e comunicar o cliente**, com isolamento entre lojas e recuperação segura de falhas. Uma landing publicada ou uma API que compila não substitui esse fluxo completo.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+npm run backend:test
+```
 
-Antes de aceitar dinheiro real, ainda são necessários testes de pagamento e webhook, idempotência, autorização por loja, backup e restauração, observabilidade, política de dados e validação com lojas piloto. O projeto não deve ser apresentado como disponível comercialmente antes dessa verificação.
+Os testes Java atuais verificam inicialização e assinatura de webhook. `npm run test:e2e` cobre apresentação e navegação mobile da landing. Eles **não** comprovam o fluxo completo de compra; essa suíte será ampliada com checkout e integração financeira.
 
-## Próximos marcos
+## Critério de lançamento
 
-1. Retirar o Supabase da aplicação ativa e consolidar o banco próprio.
-2. Fechar o fluxo de loja, catálogo, checkout sem conta e pedido com preço calculado no servidor.
-3. Integrar Pix, cartão e webhook assinado com um único provedor.
-4. Concluir painel operacional, entrega, comunicação e recompra.
-5. Publicar a nova identidade visual e iniciar cinco lojas piloto.
+Uma loja real precisa conseguir publicar o cardápio, receber e confirmar um pedido pago, preparar, entregar ou liberar retirada e comunicar o cliente. Antes de aceitar dinheiro real, precisamos validar isolamento entre lojas, webhook idempotente, estorno, backup e restauração, monitoramento e os cenários de checkout em navegador e celular.
+
+## Escopo que fica fora
+
+Marketplace de restaurantes, entregador aceitando corridas de qualquer loja, carteira financeira do motoboy, cashback, ranking, vários gateways simultâneos e aplicativo nativo não fazem parte deste MVP.
 
 ## Licença e contato
 
-O repositório ainda não declara uma licença de uso público. Para discutir o produto ou colaborar, abra uma issue neste repositório.
+Este repositório ainda não declara licença de uso público. Para conversar sobre o produto, abra uma issue.
