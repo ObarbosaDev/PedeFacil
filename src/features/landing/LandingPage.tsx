@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, ChevronDown, Clock3, Link2, Menu, PackageCheck, Repeat2, ShoppingBag, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Clock3, Link2, Menu, PackageCheck, Pizza, Repeat2, ShoppingBag, X } from "lucide-react";
 
 const pilotHref = "https://wa.me/5561984629093?text="
   + encodeURIComponent("Olá! Quero participar do piloto do Pede Fácil com a minha loja.");
@@ -74,7 +74,7 @@ export function LandingPage() {
                   <h2>Uma ação por vez.<br />Tudo no lugar.</h2>
                   <div className="demo-card">
                     <div className="demo-card-head"><span>Pedido de exemplo</span><strong>{stages[stage].status}</strong></div>
-                    <div className="demo-item"><span className="demo-food">🍕</span><div><b>Pizza da casa</b><small>1 unidade · sem cebola</small></div></div>
+                    <div className="demo-item"><span className="demo-food"><Pizza size={25} strokeWidth={1.8} /></span><div><b>Pizza da casa</b><small>1 unidade · sem cebola</small></div></div>
                     <div className="demo-card-foot"><span><StageIcon size={16} /> {stages[stage].detail}</span></div>
                   </div>
                   <div className="demo-progress">{stages.map((item, index) => (
