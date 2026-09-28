@@ -10,6 +10,7 @@ public class PaymentsProperties {
   private String mercadopagoAccessToken;
   private String mercadopagoApiBaseUrl = "https://api.mercadopago.com";
   private String mercadopagoWebhookToken;
+  private String mercadopagoWebhookSecret;
   private String supabaseUrl;
   private String supabaseServiceRoleKey;
   private Integer checkoutRateLimitMax = 20;
@@ -71,6 +72,14 @@ public class PaymentsProperties {
 
   public void setMercadopagoWebhookToken(String mercadopagoWebhookToken) {
     this.mercadopagoWebhookToken = mercadopagoWebhookToken;
+  }
+
+  public String getMercadopagoWebhookSecret() {
+    return mercadopagoWebhookSecret;
+  }
+
+  public void setMercadopagoWebhookSecret(String mercadopagoWebhookSecret) {
+    this.mercadopagoWebhookSecret = mercadopagoWebhookSecret;
   }
 
   public String getSupabaseUrl() {

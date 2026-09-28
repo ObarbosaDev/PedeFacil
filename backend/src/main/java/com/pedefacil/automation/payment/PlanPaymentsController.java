@@ -30,16 +30,19 @@ public class PlanPaymentsController {
   private final PaymentsProperties properties;
   private final SupabaseAdminClient supabaseAdminClient;
   private final MercadoPagoClient mercadoPagoClient;
+  private final MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
   private final ObjectMapper objectMapper;
 
   public PlanPaymentsController(
       PaymentsProperties properties,
       SupabaseAdminClient supabaseAdminClient,
       MercadoPagoClient mercadoPagoClient,
+      MercadoPagoWebhookSignatureValidator webhookSignatureValidator,
       ObjectMapper objectMapper) {
     this.properties = properties;
     this.supabaseAdminClient = supabaseAdminClient;
     this.mercadoPagoClient = mercadoPagoClient;
+    this.webhookSignatureValidator = webhookSignatureValidator;
     this.objectMapper = objectMapper;
   }
 
@@ -183,8 +186,14 @@ public class PlanPaymentsController {
         safePositive(properties.getWebhookRateLimitMax(), 300),
         safePositive(properties.getWebhookRateLimitWindowSeconds(), 60));
 
-    validateWebhookToken(queryParams.get("token"));
     String paymentId = extractPaymentId(queryParams, rawBody);
+    if (!webhookSignatureValidator.isValid(
+        httpRequest.getHeader("x-signature"),
+        httpRequest.getHeader("x-request-id"),
+        queryParams.get("data.id"),
+        properties.getMercadopagoWebhookSecret())) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Assinatura do webhook invalida.");
+    }
     String checkoutSessionHint = sanitizeCheckoutSessionHint(queryParams.get("checkout_session_id"));
 
     if (!StringUtils.hasText(paymentId)) {
@@ -212,6 +221,12 @@ public class PlanPaymentsController {
         orderSession == null
             ? supabaseAdminClient.getSubscriptionByCheckoutSessionId(checkoutSessionId.trim())
             : null;
+
+    if (orderSession != null) {
+      validateApprovedPayment(payment, orderSession.getCheckoutSessionId(), orderSession.getAmountCents(), orderSession.getCurrency());
+    } else if (subscription != null) {
+      validateApprovedPayment(payment, subscription.getCheckoutSessionId(), subscription.getAmountCents(), subscription.getCurrency());
+    }
 
     supabaseAdminClient.upsertPaymentLedger(
         checkoutSessionId,
@@ -301,6 +316,7 @@ public class PlanPaymentsController {
     String orderAccessToken = resolveOrderAccessToken(orderSession);
     MercadoPagoClient.PaymentInfo payment =
         mercadoPagoClient.getPayment(request.getPaymentId().trim(), orderAccessToken);
+    validateApprovedPayment(payment, checkoutSessionId, orderSession.getAmountCents(), orderSession.getCurrency());
     String providerEventId = "mp_manual_order_revalidate_" + payment.getId();
 
     supabaseAdminClient.upsertPaymentLedger(
@@ -369,6 +385,7 @@ public class PlanPaymentsController {
     }
 
     MercadoPagoClient.PaymentInfo payment = mercadoPagoClient.getPayment(request.getPaymentId().trim());
+    validateApprovedPayment(payment, checkoutSessionId, subscription.getAmountCents(), subscription.getCurrency());
     String providerEventId = "mp_manual_revalidate_" + payment.getId();
 
     supabaseAdminClient.upsertPaymentLedger(
@@ -424,12 +441,7 @@ public class PlanPaymentsController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "PAYMENTS_API_PUBLIC_BASE_URL invalida.");
     }
-    String token = properties.getMercadopagoWebhookToken();
-    if (!StringUtils.hasText(token)) {
-      return normalized + "/api/payments/mercadopago/webhook";
-    }
-    return normalized + "/api/payments/mercadopago/webhook?token="
-        + URLEncoder.encode(token.trim(), StandardCharsets.UTF_8);
+    return normalized + "/api/payments/mercadopago/webhook";
   }
 
   private String buildOrderWebhookUrl(String checkoutSessionId) {
@@ -468,14 +480,31 @@ public class PlanPaymentsController {
     return config.getMercadoPagoAccessToken().trim();
   }
 
-  private void validateWebhookToken(String tokenParam) {
-    String expected = properties.getMercadopagoWebhookToken();
-    if (!StringUtils.hasText(expected)) {
-      return;
+  static void validateApprovedPayment(
+      MercadoPagoClient.PaymentInfo payment,
+      String checkoutSessionId,
+      long amountCents,
+      String currency) {
+    if (payment == null || !checkoutSessionId.equals(payment.getExternalReference())) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Referencia do pagamento diverge da sessao.");
     }
-
-    if (!expected.trim().equals(tokenParam)) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Webhook token invalido.");
+    JsonNode payload = payment.getRawPayload();
+    String paidCurrency = payload == null ? "" : payload.path("currency_id").asText("");
+    if (!"BRL".equalsIgnoreCase(currency) || !currency.equalsIgnoreCase(paidCurrency)) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Moeda do pagamento diverge da sessao.");
+    }
+    try {
+      long paidCents = payload.path("transaction_amount").decimalValue()
+          .movePointRight(2).longValueExact();
+      if (paidCents != amountCents) {
+        throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "Valor do pagamento diverge da sessao.");
+      }
+    } catch (ArithmeticException exception) {
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+          "Valor do pagamento invalido.");
     }
   }
 

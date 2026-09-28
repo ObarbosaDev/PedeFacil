@@ -16,6 +16,7 @@ public class PaymentsStartupValidator {
     requireText(properties.getSupabaseServiceRoleKey(), "SUPABASE_SERVICE_ROLE_KEY");
     requireText(properties.getMercadopagoApiBaseUrl(), "MERCADOPAGO_API_BASE_URL");
     requireText(properties.getMercadopagoAccessToken(), "MERCADOPAGO_ACCESS_TOKEN");
+    requireText(properties.getMercadopagoWebhookSecret(), "MERCADOPAGO_WEBHOOK_SECRET");
     requireText(properties.getApiPublicBaseUrl(), "PAYMENTS_API_PUBLIC_BASE_URL");
 
     validateHttpsUrl(properties.getSupabaseUrl(), "SUPABASE_URL");
@@ -40,4 +41,3 @@ public class PaymentsStartupValidator {
     }
   }
 }
-
