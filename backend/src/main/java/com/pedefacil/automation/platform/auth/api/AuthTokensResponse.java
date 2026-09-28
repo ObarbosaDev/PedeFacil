@@ -1,5 +1,8 @@
 package com.pedefacil.automation.platform.auth.api;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AuthTokensResponse {
   private String accessToken;
   private String refreshToken;

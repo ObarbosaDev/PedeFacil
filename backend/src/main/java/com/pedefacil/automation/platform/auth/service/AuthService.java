@@ -187,6 +187,14 @@ public class AuthService {
     return issueTokens(refreshToken.getUser());
   }
 
+  @Transactional
+  public void revoke(String refreshTokenValue) {
+    appRefreshTokenRepository.findByToken(hashToken(refreshTokenValue)).ifPresent(token -> {
+      token.setRevokedAt(OffsetDateTime.now());
+      appRefreshTokenRepository.save(token);
+    });
+  }
+
   private AuthTokensResponse issueTokens(AppUser user) {
     AppRefreshToken refreshToken = new AppRefreshToken();
     refreshToken.setUser(user);
@@ -219,8 +227,8 @@ public class AuthService {
     } catch (Exception error) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role invalida.");
     }
-    if (parsed == AppUserRole.ADMIN) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cadastro administrativo indisponivel.");
+    if (parsed != AppUserRole.STORE_OWNER && parsed != AppUserRole.CUSTOMER) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cadastro deste perfil indisponivel.");
     }
     return parsed;
   }
