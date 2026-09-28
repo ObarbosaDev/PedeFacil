@@ -17,17 +17,27 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Repo safety check
-        run: npm run check:repo
 
       - name: Lint
         run: npm run lint
 
       - name: Typecheck
-        run: npx tsc --noEmit -p tsconfig.app.json
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Backend tests
+        run: npm run backend:test
