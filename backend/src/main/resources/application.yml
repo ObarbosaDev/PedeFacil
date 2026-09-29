@@ -49,7 +49,7 @@ platform:
   orders:
     tracking-secret: ${ORDER_TRACKING_SECRET:}
   auth:
-    app-base-url: ${APP_BASE_URL:http://localhost:5173}
+    app-base-url: ${APP_BASE_URL:http://localhost:8080}
     jwt-secret: ${APP_AUTH_JWT_SECRET:}
     access-token-minutes: ${APP_AUTH_ACCESS_TOKEN_MINUTES:30}
     refresh-token-days: ${APP_AUTH_REFRESH_TOKEN_DAYS:30}

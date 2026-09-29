@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "platform.auth")
 public class PlatformAuthProperties {
 
-  private String appBaseUrl = "http://localhost:5173";
+  private String appBaseUrl = "http://localhost:8080";
   private String jwtSecret;
   private int accessTokenMinutes = 30;
   private int refreshTokenDays = 30;
